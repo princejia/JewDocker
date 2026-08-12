@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import OSS from "ali-oss";
+import COS from "cos-nodejs-sdk-v5";
 import { randomUUID } from "node:crypto";
-import { extname } from "node:path";
 
 export const runtime = "nodejs";
 
@@ -27,17 +26,18 @@ const EXT_BY_TYPE: Record<string, string> = {
 };
 
 function readConfig() {
-  const region = process.env.OSS_REGION;
-  const bucket = process.env.OSS_BUCKET;
-  const accessKeyId = process.env.OSS_ACCESS_KEY_ID;
-  const accessKeySecret = process.env.OSS_ACCESS_KEY_SECRET;
-  if (!region || !bucket || !accessKeyId || !accessKeySecret) return null;
+  const region = process.env.COS_REGION;
+  const bucket = process.env.COS_BUCKET;
+  const secretId = process.env.COS_SECRET_ID;
+  const secretKey = process.env.COS_SECRET_KEY;
+  if (!region || !bucket || !secretId || !secretKey) return null;
 
+  // 留空的环境变量是空串而非 undefined，用 || 才能正确回落
   const baseUrl =
-    process.env.OSS_PUBLIC_BASE_URL?.replace(/\/$/, "") ??
-    `https://${bucket}.${region}.aliyuncs.com`;
+    process.env.COS_PUBLIC_BASE_URL?.replace(/\/$/, "") ||
+    `https://${bucket}.cos.${region}.myqcloud.com`;
 
-  return { region, bucket, accessKeyId, accessKeySecret, baseUrl };
+  return { region, bucket, secretId, secretKey, baseUrl };
 }
 
 export async function POST(req: NextRequest) {
@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         error:
-          "服务端未配置对象存储（OSS_REGION / OSS_BUCKET / OSS_ACCESS_KEY_ID / OSS_ACCESS_KEY_SECRET）",
+          "服务端未配置对象存储（COS_REGION / COS_BUCKET / COS_SECRET_ID / COS_SECRET_KEY）",
       },
       { status: 500 }
     );
@@ -71,26 +71,31 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const client = new OSS({
-    region: config.region,
-    bucket: config.bucket,
-    accessKeyId: config.accessKeyId,
-    accessKeySecret: config.accessKeySecret,
-    secure: true,
+  const cos = new COS({
+    SecretId: config.secretId,
+    SecretKey: config.secretKey,
   });
 
-  const key = `${PREFIX}/${randomUUID()}${EXT_BY_TYPE[file.type] ?? extname(file.name)}`;
+  const key = `${PREFIX}/${randomUUID()}${EXT_BY_TYPE[file.type]}`;
+  const body = Buffer.from(await file.arrayBuffer());
 
   try {
-    await client.put(key, Buffer.from(await file.arrayBuffer()), {
-      headers: {
-        "Content-Type": file.type,
-        // 文档类强制下载，避免在 OSS 域名下渲染 HTML 造成的 XSS
-        "Content-Disposition": DOC_TYPES.includes(file.type)
-          ? "attachment"
-          : "inline",
-        "Cache-Control": "public, max-age=31536000, immutable",
-      },
+    await new Promise<void>((resolve, reject) => {
+      cos.putObject(
+        {
+          Bucket: config.bucket,
+          Region: config.region,
+          Key: key,
+          Body: body,
+          ContentType: file.type,
+          // 文档类强制下载，避免在存储域名下渲染 HTML 造成的 XSS
+          ContentDisposition: DOC_TYPES.includes(file.type)
+            ? "attachment"
+            : "inline",
+          CacheControl: "public, max-age=31536000, immutable",
+        },
+        (err) => (err ? reject(err) : resolve())
+      );
     });
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);

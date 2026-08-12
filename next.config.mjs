@@ -5,11 +5,13 @@
  */
 function imageHosts() {
   const hosts = new Set();
-  if (process.env.OSS_PUBLIC_BASE_URL) {
-    hosts.add(new URL(process.env.OSS_PUBLIC_BASE_URL).hostname);
+  if (process.env.COS_PUBLIC_BASE_URL) {
+    hosts.add(new URL(process.env.COS_PUBLIC_BASE_URL).hostname);
   }
-  if (process.env.OSS_BUCKET && process.env.OSS_REGION) {
-    hosts.add(`${process.env.OSS_BUCKET}.${process.env.OSS_REGION}.aliyuncs.com`);
+  if (process.env.COS_BUCKET && process.env.COS_REGION) {
+    hosts.add(
+      `${process.env.COS_BUCKET}.cos.${process.env.COS_REGION}.myqcloud.com`
+    );
   }
   return [...hosts].map((hostname) => ({ protocol: "https", hostname }));
 }

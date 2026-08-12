@@ -1,10 +1,10 @@
 #!/bin/bash
-# 每日数据库备份：dump → gzip → 上传 OSS → 清理本地旧文件
+# 每日数据库备份：dump → gzip → 上传对象存储 → 清理本地旧文件
 #
-# 安装到 crontab（每天凌晨 3 点）：
+# 安装到 crontab（每天凌晨3 点）：
 #   0 3 * * * cd /opt/jewelry && ./scripts/backup-db.sh >> /var/log/jewelry-backup.log 2>&1
 #
-# 依赖：ossutil 已配置好凭据（ossutil config）
+# 依赖：coscli 已配置好凭据（coscli config init）
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -27,9 +27,9 @@ if [ "$(stat -c%s "$FILE")" -lt 1024 ]; then
   exit 1
 fi
 
-if [ -n "${OSS_BACKUP_PATH:-}" ]; then
-  ossutil cp "$FILE" "$OSS_BACKUP_PATH/" >/dev/null
-  echo "已上传 $OSS_BACKUP_PATH/$(basename "$FILE")"
+if [ -n "${COS_BACKUP_PATH:-}" ]; then
+  coscli cp "$FILE" "$COS_BACKUP_PATH/" >/dev/null
+  echo "已上传 $COS_BACKUP_PATH/$(basename "$FILE")"
 fi
 
 find "$BACKUP_DIR" -name 'jewelry-*.sql.gz' -mtime +"$RETAIN_DAYS" -delete

@@ -40,11 +40,12 @@ SERVICE_ROLE_KEY=${serviceRoleKey}
 # 会话 cookie 签名密钥，与上面的 JWT_SECRET 无关，不要复用
 AUTH_SECRET=${rand(32)}
 
-# 阿里云 OSS（在控制台创建 Bucket 与 RAM 子账号后填写）
-OSS_REGION=oss-cn-hangzhou
-OSS_BUCKET=
-OSS_ACCESS_KEY_ID=
-OSS_ACCESS_KEY_SECRET=
-# 可选：绑定的 CDN 自定义域名，留空则用 Bucket 默认域名
-OSS_PUBLIC_BASE_URL=
+# 腾讯云 COS（在控制台创建存储桶与子账号后填写）
+# COS_BUCKET 必须带 APPID 后缀，如 jewelry-1300000000
+COS_REGION=ap-guangzhou
+COS_BUCKET=
+COS_SECRET_ID=
+COS_SECRET_KEY=
+# 可选：绑定的 CDN 自定义域名，留空则用存储桶默认域名
+COS_PUBLIC_BASE_URL=
 `);
