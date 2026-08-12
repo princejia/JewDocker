@@ -98,7 +98,15 @@ export async function POST(req: NextRequest) {
       );
     });
   } catch (e) {
-    const message = e instanceof Error ? e.message : String(e);
+    // COS 的错误对象带 code / statusCode / RequestId，记录下来便于在腾讯云工单或日志里排查
+    console.error("[upload] COS putObject failed", {
+      bucket: config.bucket,
+      region: config.region,
+      key,
+      detail: e,
+    });
+    const err = e as { code?: string; message?: string };
+    const message = err?.code || err?.message || String(e);
     return NextResponse.json(
       { error: `上传失败：${message}` },
       { status: 500 }

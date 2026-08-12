@@ -71,16 +71,16 @@ async function renderLabelImage(qrDataUrl: string, code: string, name: string): 
   ctx.fillRect(0, 0, w, h);
 
   // 二维码
-  const qrSize = 22 * PX_PER_MM;
+  const qrSize = 20 * PX_PER_MM;
   const qrImg = await loadImage(qrDataUrl);
   ctx.drawImage(qrImg, 3 * PX_PER_MM, (h - qrSize) / 2, qrSize, qrSize);
 
   // 文本
-  const textX = (3 + 22 + 3) * PX_PER_MM;
+  const textX = (3 + 20 + 3) * PX_PER_MM;
   const textW = w - textX - 3 * PX_PER_MM;
   ctx.textBaseline = "top";
   ctx.fillStyle = "#5a5a5a";
-  ctx.font = "600 11px 'Microsoft YaHei', sans-serif";
+  ctx.font = "600 14px 'Microsoft YaHei', sans-serif";
   ctx.fillText(code, textX, 7 * PX_PER_MM, textW);
   ctx.fillStyle = "#111";
   ctx.font = "700 14px 'Microsoft YaHei', sans-serif";
