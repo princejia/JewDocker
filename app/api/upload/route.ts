@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createServerClient } from "@/lib/supabase-server";
+import OSS from "ali-oss";
+import { randomUUID } from "node:crypto";
+import { extname } from "node:path";
 
 export const runtime = "nodejs";
 
-const BUCKET = "product-images";
+const PREFIX = "product-images";
 const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const DOC_TYPES = [
   "application/pdf",
@@ -13,40 +15,38 @@ const DOC_TYPES = [
 const ALLOWED_TYPES = [...IMAGE_TYPES, ...DOC_TYPES];
 const MAX_SIZE = 10 * 1024 * 1024;
 
-/** 确保存储桶存在，不存在则创建为公开桶 */
-async function ensureBucket(
-  supabase: ReturnType<typeof createServerClient>
-): Promise<string | null> {
-  const { data, error } = await supabase.storage.getBucket(BUCKET);
-  if (data) {
-    // 桶已存在：放宽允许的文件类型（兼容旧的仅图片限制）
-    await supabase.storage.updateBucket(BUCKET, {
-      public: true,
-      fileSizeLimit: MAX_SIZE,
-      allowedMimeTypes: ALLOWED_TYPES,
-    });
-    return null;
-  }
-  // getBucket 失败通常是桶不存在，尝试创建
-  const { error: createError } = await supabase.storage.createBucket(BUCKET, {
-    public: true,
-    fileSizeLimit: MAX_SIZE,
-    allowedMimeTypes: ALLOWED_TYPES,
-  });
-  // 并发情况下可能已被其它请求创建，忽略“已存在”错误
-  if (createError && !/already exists/i.test(createError.message)) {
-    return createError.message || error?.message || "无法创建存储桶";
-  }
-  return null;
+// 只允许由内容类型推导扩展名，避免用户文件名参与对象键的构造
+const EXT_BY_TYPE: Record<string, string> = {
+  "image/jpeg": ".jpg",
+  "image/png": ".png",
+  "image/webp": ".webp",
+  "application/pdf": ".pdf",
+  "application/msword": ".doc",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+    ".docx",
+};
+
+function readConfig() {
+  const region = process.env.OSS_REGION;
+  const bucket = process.env.OSS_BUCKET;
+  const accessKeyId = process.env.OSS_ACCESS_KEY_ID;
+  const accessKeySecret = process.env.OSS_ACCESS_KEY_SECRET;
+  if (!region || !bucket || !accessKeyId || !accessKeySecret) return null;
+
+  const baseUrl =
+    process.env.OSS_PUBLIC_BASE_URL?.replace(/\/$/, "") ??
+    `https://${bucket}.${region}.aliyuncs.com`;
+
+  return { region, bucket, accessKeyId, accessKeySecret, baseUrl };
 }
 
 export async function POST(req: NextRequest) {
-  // 环境变量校验，便于线上排查
-  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  const config = readConfig();
+  if (!config) {
     return NextResponse.json(
       {
         error:
-          "服务端未配置 Supabase 密钥（SUPABASE_SERVICE_ROLE_KEY），请在部署平台环境变量中设置",
+          "服务端未配置对象存储（OSS_REGION / OSS_BUCKET / OSS_ACCESS_KEY_ID / OSS_ACCESS_KEY_SECRET）",
       },
       { status: 500 }
     );
@@ -58,8 +58,6 @@ export async function POST(req: NextRequest) {
   if (!file) {
     return NextResponse.json({ error: "未提供文件" }, { status: 400 });
   }
-
-  // 限制：图片或文档，最大 10MB
   if (!ALLOWED_TYPES.includes(file.type)) {
     return NextResponse.json(
       { error: "只支持 JPG/PNG/WEBP 图片或 PDF/Word 文档" },
@@ -73,45 +71,34 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const supabase = createServerClient();
-  const ext = file.name.split(".").pop();
-  const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+  const client = new OSS({
+    region: config.region,
+    bucket: config.bucket,
+    accessKeyId: config.accessKeyId,
+    accessKeySecret: config.accessKeySecret,
+    secure: true,
+  });
 
-  async function upload() {
-    return supabase.storage
-      .from(BUCKET)
-      .upload(filename, file as File, { contentType: (file as File).type });
-  }
+  const key = `${PREFIX}/${randomUUID()}${EXT_BY_TYPE[file.type] ?? extname(file.name)}`;
 
-  let { error } = await upload();
-
-  // 桶不存在或类型受限时自动创建/放宽后重试一次
-  if (
-    error &&
-    /bucket|not found|does not exist|mime|not supported|allowed/i.test(
-      error.message
-    )
-  ) {
-    const bucketError = await ensureBucket(supabase);
-    if (bucketError) {
-      return NextResponse.json(
-        { error: `存储桶不可用：${bucketError}` },
-        { status: 500 }
-      );
-    }
-    ({ error } = await upload());
-  }
-
-  if (error) {
+  try {
+    await client.put(key, Buffer.from(await file.arrayBuffer()), {
+      headers: {
+        "Content-Type": file.type,
+        // 文档类强制下载，避免在 OSS 域名下渲染 HTML 造成的 XSS
+        "Content-Disposition": DOC_TYPES.includes(file.type)
+          ? "attachment"
+          : "inline",
+        "Cache-Control": "public, max-age=31536000, immutable",
+      },
+    });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
     return NextResponse.json(
-      { error: `上传失败：${error.message}` },
+      { error: `上传失败：${message}` },
       { status: 500 }
     );
   }
 
-  const {
-    data: { publicUrl },
-  } = supabase.storage.from(BUCKET).getPublicUrl(filename);
-
-  return NextResponse.json({ url: publicUrl });
+  return NextResponse.json({ url: `${config.baseUrl}/${key}` });
 }

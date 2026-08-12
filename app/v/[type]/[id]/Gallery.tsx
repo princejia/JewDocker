@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 
 export function Gallery({ images, title }: { images: string[]; title: string }) {
   const [active, setActive] = useState(0);
@@ -25,13 +26,15 @@ export function Gallery({ images, title }: { images: string[]; title: string }) 
       <button
         type="button"
         onClick={() => setZoom(true)}
-        className="aspect-square w-full cursor-zoom-in bg-gradient-to-br from-amber-100 to-rose-100"
+        className="relative aspect-square w-full cursor-zoom-in bg-gradient-to-br from-amber-100 to-rose-100"
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
+        <Image
           src={images[active]}
           alt={title}
-          className="h-full w-full object-cover"
+          fill
+          sizes="(max-width: 768px) 100vw, 768px"
+          className="object-cover"
+          priority
         />
       </button>
 
@@ -42,12 +45,11 @@ export function Gallery({ images, title }: { images: string[]; title: string }) 
               key={url}
               type="button"
               onClick={() => setActive(i)}
-              className={`h-16 w-16 flex-shrink-0 overflow-hidden rounded-xl border-2 transition ${
+              className={`relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-xl border-2 transition ${
                 i === active ? "border-amber-400" : "border-transparent opacity-70"
               }`}
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={url} alt="" className="h-full w-full object-cover" />
+              <Image src={url} alt="" fill sizes="64px" className="object-cover" />
             </button>
           ))}
         </div>
@@ -83,13 +85,14 @@ export function Gallery({ images, title }: { images: string[]; title: string }) 
             {images.map((url) => (
               <div
                 key={url}
-                className="flex h-full w-full flex-shrink-0 items-center justify-center p-4"
+                className="relative flex h-full w-full flex-shrink-0 items-center justify-center p-4"
               >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
+                <Image
                   src={url}
                   alt={title}
-                  className="max-h-full max-w-full cursor-zoom-out object-contain"
+                  fill
+                  sizes="100vw"
+                  className="cursor-zoom-out object-contain p-4"
                 />
               </div>
             ))}

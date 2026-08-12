@@ -1,0 +1,4 @@
+* text=auto eol=lf
+
+# 这两个脚本在 Linux 容器内执行，CRLF 会导致 $'\r': command not found
+*.sh text eol=lf

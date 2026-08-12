@@ -18,10 +18,18 @@ export type SessionPayload = {
 };
 
 function getSecret(): Uint8Array {
-  const secret =
-    process.env.AUTH_SECRET ??
-    // 兜底密钥仅用于本地开发，生产请在环境变量配置 AUTH_SECRET
-    "dev-only-insecure-secret-change-me-in-production-env";
+  const secret = process.env.AUTH_SECRET;
+  if (!secret) {
+    // 兜底密钥是公开常量，生产环境用它等于任何人都能伪造 super_admin 会话
+    if (process.env.NODE_ENV === "production") {
+      throw new Error(
+        "缺少 AUTH_SECRET 环境变量。请生成一个随机密钥（openssl rand -base64 32）并在部署环境中配置。"
+      );
+    }
+    return new TextEncoder().encode(
+      "dev-only-insecure-secret-change-me-in-production-env"
+    );
+  }
   return new TextEncoder().encode(secret);
 }
 

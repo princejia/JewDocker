@@ -323,17 +323,9 @@ CREATE POLICY "Authenticated users can manage loans"
   TO authenticated USING (true) WITH CHECK (true);
 
 -- ============================================================
--- Storage 策略（请先在 Storage 创建名为 product-images 的 Public Bucket）
+-- 文件存储
+-- 已改用阿里云 OSS，由应用服务端 SDK 直接上传，不再使用 Supabase Storage。
 -- ============================================================
-DROP POLICY IF EXISTS "Authenticated users can upload images" ON storage.objects;
-CREATE POLICY "Authenticated users can upload images"
-  ON storage.objects FOR INSERT
-  TO authenticated WITH CHECK (bucket_id = 'product-images');
-
-DROP POLICY IF EXISTS "Anyone can read product images" ON storage.objects;
-CREATE POLICY "Anyone can read product images"
-  ON storage.objects FOR SELECT
-  USING (bucket_id = 'product-images');
 
 -- ============================================================
 -- 应用账号表（自建用户名登录，密码 bcrypt 哈希）
