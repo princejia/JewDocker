@@ -1,10 +1,10 @@
 # 珠宝黄金销售管理系统
-## Jewelry & Gold Sales Management System — 技术设计文档 v1.4
+## Jewelry & Gold Sales Management System — 技术设计文档 v2.0
 
-**技术栈：** Next.js 14 (App Router) + Supabase + Vercel  
-**数据库：** PostgreSQL (Supabase)  
-**部署平台：** Vercel（免费 Hobby 套餐）  
-**预计月成本：** ¥0
+**技术栈：** Next.js 14 (App Router) + PostgREST + PostgreSQL（全栈自托管）  
+**数据库：** PostgreSQL 16（自建容器）  
+**部署平台：** 腾讯云轻量应用服务器 · Docker Compose  
+**预计月成本：** ¥60 起（服务器 + 对象存储）
 
 ---
 
@@ -40,14 +40,17 @@
 
 | 层级 | 技术选型 | 选型理由 |
 |------|----------|----------|
-| 前端框架 | Next.js 14 (App Router) | 内置 SSR/SSG，SEO 友好，免费部署 |
+| 前端框架 | Next.js 14 (App Router) | 内置 SSR/SSG，`output: "standalone"` 产物可直接容器化 |
 | UI 组件库 | shadcn/ui + Tailwind CSS | 无头组件，样式灵活，无额外费用 |
-| 后端 API | Next.js API Routes | Serverless 函数，与前端同仓库，零运维成本 |
-| 数据库 | PostgreSQL (Supabase) | 免费 500MB，自带管理界面、认证、实时订阅 |
-| 文件存储 | Supabase Storage | 免费 1GB，用于存储产品图片 |
+| 后端 API | Next.js API Routes | 与前端同仓库，运行在自建 Node 容器中 |
+| 数据库 | PostgreSQL 16（自建容器） | 数据完全自持，无容量与出海延迟限制 |
+| 数据访问层 | PostgREST v12 + `@supabase/supabase-js` | PostgREST 即 Supabase REST 层的实现，网关重写前缀后 SDK 代码零改动 |
+| 文件存储 | 腾讯云 COS | 国内访问快，按量计费，图片与认证报告分目录存放 |
 | 认证鉴权 | 自建用户名登录（JWT + bcrypt） | 账号存于 `app_users` 表，密码 bcrypt 哈希；jose 签发 HS256 会话存于 httpOnly Cookie，仅超管可后台新增账号 |
 | 二维码 | qrcode + jspdf + html5-qrcode | 客户端生成标签二维码（qrcode）、导出标签 PDF（jspdf）与拍照/选图识别（html5-qrcode scanFile），纯前端运行，免费 |
-| 部署托管 | Vercel | 个人项目免费，自动 CI/CD，与 Next.js 原生集成 |
+| 部署托管 | 腾讯云轻量 + Docker Compose | 国内访问稳定，可备案；四容器一键起停 |
+
+> **为什么迁离 Supabase + Vercel：** 两者服务器均在海外，国内访问不稳定且数据库延迟高；域名要在大陆合规提供服务还需备案，而备案要求服务器在境内。迁移后 `@supabase/supabase-js` 保留未换，因为 PostgREST 就是 Supabase REST 层本身。
 
 ---
 
@@ -59,14 +62,14 @@
 |---------------|---------------|----------|------|
 | id | 主键 | UUID | 自动生成，唯一标识每件产品 |
 | code | 产品编号 | VARCHAR(20) | 入库时自动生成并存储，规则 `P + 北京时间年月日时分秒`（如 `P20260624153012`），便于查询 |
-| image_urls | 产品图片 | TEXT[] | 图片 URL 数组，存储在 Supabase Storage |
+| image_urls | 产品图片 | TEXT[] | 图片 URL 数组，存储在腾讯云 COS |
 | name | 产品名称 | VARCHAR(255) | 产品完整名称，如：18K金钻石戒指 |
 | total_weight | 重量 | DECIMAL(10,3) | 产品重量，精度至小数点后3位，单位由 weight_unit 决定 |
 | weight_unit | 重量单位 | VARCHAR(20) | 可输入单位，默认“克(g)”，可选“克拉(ct)”或自定义 |
 | size | 尺寸 | VARCHAR(100) | 尺寸信息，如：戒指12号、手链18cm |
 | origin | 产地 | VARCHAR(100) | 产地信息，如：深圳水贝、香港等 |
 | inlaid_stones | 镶嵌配石 | TEXT | 配石描述，如：主石1ct D/VVS1，配石0.3ct |
-| certificate_urls | 认证报告 | TEXT[] | 认证报告文件 URL 数组，支持图片与文档（PDF/Word），存储在 Supabase Storage |
+| certificate_urls | 认证报告 | TEXT[] | 认证报告文件 URL 数组，支持图片与文档（PDF/Word），存储在腾讯云 COS |
 | gemstone_category | 宝石分类 | VARCHAR(100) | 自由文本，支持输入并按历史值模糊自动补全，可为空 |
 | function_category | 功能分类 | VARCHAR(100) | 自由文本，支持输入并按历史值模糊自动补全，可为空 |
 | source_loose_stone_id | 来源裸石 | UUID FK | 关联 loose_stones.id，可为空（由裸石加工生产时填写） |
@@ -121,7 +124,7 @@
 |--------|--------|------|------|
 | id | 主键 | UUID | 唯一标识 |
 | code | 裸石编号 | VARCHAR(20) | 入库时自动生成并存储，规则 `L + 北京时间年月日时分秒`（如 `L20260624153012`） |
-| image_urls | 裸石图片 | TEXT[] | 图片 URL 数组，存储在 Supabase Storage |
+| image_urls | 裸石图片 | TEXT[] | 图片 URL 数组，存储在腾讯云 COS |
 | material | 产品名称 | VARCHAR(100) | 裸石产品名称，如：天然翡翠、矢车菊蓝宝 |
 | size | 尺寸 | VARCHAR(100) | 裸石尺寸，如：10×8mm |
 | weight | 重量 | DECIMAL(10,3) | 裸石重量，单位由 weight_unit 决定 |
@@ -354,15 +357,22 @@ CREATE INDEX idx_item_loans_returned ON item_loans(returned_at);
 ```
 【用户浏览器】
       ↕ HTTPS
-【Vercel / 边缘网络】
-  ├── Next.js 前端页面 (React / SSR / SSG)
-  └── Next.js API Routes (Serverless Functions)
-      ↕ Supabase SDK / REST API
-【Supabase 云服务】
-  ├── PostgreSQL 数据库（产品、客户、销售数据）
-  ├── Supabase Storage（产品图片文件）
-  └── 自建用户名登录（JWT Cookie + app_users 表）
+【宿主机 Nginx】  终止 TLS，client_max_body_size 12M
+      ↕ http://127.0.0.1:3000
+┌─────────────── Docker Compose 网络 ───────────────┐
+│ web        Next.js standalone（页面 + API Routes） │
+│              ↓ SUPABASE_URL=http://gateway        │
+│ gateway    nginx，把 /rest/v1/* 重写到 PostgREST 根 │
+│              ↓                                     │
+│ postgrest  PostgREST v12，校验 JWT 并按 role 切角色 │
+│              ↓                                     │
+│ db         PostgreSQL 16，数据卷 db-data          │
+└───────────────────────────────────────────────────┘
+      ↕ HTTPS（服务端直传）
+【腾讯云 COS】产品图片 / 认证报告
 ```
+
+只有 `web` 映射端口，且绑定在 `127.0.0.1`，其余三个容器不对外暴露。数据库访问一律在服务端以 `service_role` 完成，浏览器从不直连 PostgREST。
 
 ### 3.2 项目目录结构
 
@@ -395,7 +405,7 @@ jewelry-system/
 │   │   └── [type]/
 │   │       └── [id]/
 │   │           └── page.tsx         # 未登录展示（不含价格）/ 已登录跳编辑
-│   └── api/                         # API Routes (Serverless)
+│   └── api/                         # API Routes（运行于自建 Node 容器）
 │       ├── products/
 │       │   ├── route.ts             # GET 列表 / POST 新增
 │       │   └── [id]/
@@ -405,7 +415,7 @@ jewelry-system/
 │       ├── customers/
 │       │   └── route.ts             # 客户 CRUD
 │       └── upload/
-│           └── route.ts             # 图片上传至 Supabase Storage
+│           └── route.ts             # 图片/文档上传至腾讯云 COS
 ├── components/
 │   ├── layout/
 │   │   ├── Sidebar.tsx              # 侧边栏导航
@@ -422,14 +432,30 @@ jewelry-system/
 │   └── reports/
 │       └── ProfitChart.tsx          # 利润折线图
 ├── lib/
-│   ├── supabase.ts                  # Supabase 客户端
-│   ├── supabase-server.ts           # 服务端 Supabase 客户端
+│   ├── auth.ts                      # 会话 JWT 签发与校验
+│   ├── users.ts                     # 账号查询与 bcrypt 密码校验
+│   ├── supabase-server.ts           # 服务端数据访问客户端（service_role）
+│   ├── supabase-public.ts           # 公开展示页用的受限客户端
 │   ├── labels.ts                    # 标签二维码生成与 PDF 导出
 │   └── utils.ts                     # 工具函数（格式化金额等）
 ├── types/
 │   └── index.ts                     # TypeScript 类型定义
-├── .env.local                       # 环境变量（不提交 Git）
-├── next.config.ts
+├── middleware.ts                    # 全站鉴权入口（含 /api）
+├── docker/
+│   └── gateway.conf                 # /rest/v1 前缀重写
+├── supabase/
+│   ├── schema.sql                   # 建表脚本（容器首启自动执行）
+│   └── init/
+│       ├── 00-roles.sh              # 创建 anon/authenticated/service_role/authenticator
+│       └── 02-grants.sql            # 表级授权与 PostgREST schema 重载
+├── scripts/
+│   ├── gen-keys.mjs                 # 生成生产 .env（零依赖）
+│   └── backup-db.sh                 # 数据库备份到 COS
+├── Dockerfile                       # 三阶段构建，非 root 运行
+├── docker-compose.yml               # 四容器编排
+├── .env                             # 生产密钥（不提交 Git）
+├── .env.local                       # 本地开发变量（不提交 Git）
+├── next.config.mjs
 ├── tailwind.config.ts
 └── package.json
 ```
@@ -480,7 +506,7 @@ jewelry-system/
 
 #### 产品新增/编辑页 `/products/new` 和 `/products/[id]`
 
-- 多图上传（拖拽或点击），上传至 Supabase Storage
+- 多图上传（拖拽或点击），上传至腾讯云 COS
 - **认证报告**上传：支持图片与文档（PDF/Word），图片显示缩略图、文档显示文件卡片，可点击查看
 - 所有字段均有对应表单控件（详见第六章）
 - **重量 + 可输入单位**：重量数字框旁配单位输入（默认「克(g)」，可选「克拉(ct)」或自定义）
@@ -587,7 +613,7 @@ jewelry-system/
 | GET | /api/products/[id] | 产品详情 | 获取单个产品完整信息 |
 | PATCH | /api/products/[id] | 更新产品 | 部分更新 |
 | DELETE | /api/products/[id] | 删除产品 | 软删除 |
-| POST | /api/upload | 上传文件 | 上传图片/认证报告文档至 Supabase Storage，返回 URL |
+| POST | /api/upload | 上传文件 | 上传图片/认证报告文档至腾讯云 COS，返回 URL |
 | GET | /api/sales | 获取销售记录 | 含产品/裸石关联，支持时间范围筛选 |
 | POST | /api/sales | 创建销售记录 | 物品为产品或裸石，同时更新其销售状态与出售价；**借调中的物品拒绝出售** |
 | PATCH | /api/sales/[id] | 修改销售记录 | 同步回写物品成交价/状态/时间 |
@@ -1037,193 +1063,248 @@ export function ProductCard({ product }: { product: Product }) {
 
 ## 七、部署流程
 
-### 步骤一：初始化 Supabase
+### 步骤一：服务器准备
 
-1. 访问 https://supabase.com 注册账号，创建新项目
-2. 进入 **Settings > API**，记录以下三个值：
-   - `Project URL`
-   - `anon public key`
-   - `service_role secret key`
-3. 进入 **SQL Editor**，执行第二章中的全部 SQL 建表语句
-4. 进入 **Storage**，创建 Bucket：
-   - Bucket 名称：`product-images`
-   - 访问权限：**Public**
-5. 进入 **Authentication > Policies**，确认 RLS 策略已按第八章配置
-
-### 步骤二：初始化 Next.js 项目
+腾讯云轻量应用服务器，Ubuntu 24.04，2C2G 起步（构建 Next.js 时内存峰值较高，1G 会 OOM）。
 
 ```bash
-# 创建项目
-npx create-next-app@latest jewelry-system \
-  --typescript \
-  --tailwind \
-  --app \
-  --src-dir=false \
-  --import-alias="@/*"
-
-cd jewelry-system
-
-# 安装 Supabase
-npm install @supabase/supabase-js @supabase/auth-helpers-nextjs
-
-# 安装 shadcn/ui
-npx shadcn-ui@latest init
-
-# 安装常用 shadcn 组件
-npx shadcn-ui@latest add button input label select switch badge card table dialog
-
-# 安装图表库（报表页使用）
-npm install recharts
-
-# 安装表单验证
-npm install zod react-hook-form @hookform/resolvers
-
-# 安装 Excel 导出（exceljs 支持图片嵌入，xlsx 用于报表）
-npm install exceljs xlsx
-
-# 安装二维码生成、PDF 导出与扫码识别（标签 PDF / 扫码查询）
-npm install qrcode jspdf html5-qrcode
-npm install -D @types/qrcode
+# 默认用户是 ubuntu，不是 root/deploy
+sudo usermod -aG docker ubuntu   # 加完需退出重新登录才生效
+docker version                    # 验证免 sudo 可用
 ```
 
-### 步骤三：配置环境变量
+在**控制台**的防火墙里放通 TCP `80` 和 `443`。轻量服务器的防火墙在云平台侧，默认只开 22，在系统里改 `ufw` 不起作用。
 
-创建 `.env.local` 文件（不要提交到 Git）：
+### 步骤二：获取代码与生成密钥
+
+```bash
+sudo mkdir -p /opt/jewelry
+sudo chown -R ubuntu:ubuntu /opt/jewelry
+cd /opt/jewelry
+git clone <仓库地址> .
+
+# 生成全部生产密钥
+node scripts/gen-keys.mjs > .env.new
+mv .env.new .env && chmod 600 .env
+```
+
+`scripts/gen-keys.mjs` 只用 `node:crypto`，**不依赖任何三方包**。它是部署第一步就要跑的引导脚本，此时服务器上往往还没有 `node_modules`，也不应为它装。
+
+先写 `.env.new` 再改名，是为了避免脚本报错时 shell 已经把 `.env` 截成空文件。
+
+它会输出：
+
+| 变量 | 用途 |
+|---|---|
+| `POSTGRES_PASSWORD` | postgres 超级用户密码 |
+| `AUTHENTICATOR_PASSWORD` | PostgREST 连库的 `authenticator` 角色密码 |
+| `JWT_SECRET` | PostgREST 校验 Bearer token 的密钥 |
+| `ANON_KEY` / `SERVICE_ROLE_KEY` | 由 `JWT_SECRET` 签发的 HS256 token，`role` 声明决定数据库角色 |
+| `AUTH_SECRET` | 应用会话 Cookie 的签名密钥，**与 `JWT_SECRET` 无关，不要复用** |
+
+### 步骤三：配置对象存储
+
+在腾讯云 COS 创建存储桶：
+
+1. 权限选 **私有读写**，不要选公有读
+2. 在【权限管理 → 存储桶策略】只给 `product-images/*` 前缀开匿名 `cos:GetObject`，其余路径保持私有
+3. 在 CAM 创建子账号，仅授予该桶的读写权限，取得 SecretId / SecretKey
+
+把四项填进 `.env`：
 
 ```env
-# Supabase
-NEXT_PUBLIC_SUPABASE_URL=https://xxxxxxxxxxxx.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key_here
-SUPABASE_SERVICE_ROLE_KEY=your_service_role_key_here
+COS_REGION=ap-guangzhou
+COS_BUCKET=jewelry-1300000000    # 必须带 APPID 后缀
+COS_SECRET_ID=AKID...
+COS_SECRET_KEY=...
+COS_PUBLIC_BASE_URL=             # 可选，绑了 CDN 自定义域名才填
 ```
 
-### 步骤四：部署到 Vercel
+检查没有遗漏（除 `COS_PUBLIC_BASE_URL` 外不应有输出）：
 
 ```bash
-# 推送代码到 GitHub
-git init
-git add .
-git commit -m "init: jewelry management system"
-git remote add origin https://github.com/your-name/jewelry-system.git
-git push -u origin main
+grep -E '^[A-Z_]+=$' .env
 ```
 
-1. 访问 https://vercel.com 用 GitHub 账号登录 → **Add New → Project**，导入本仓库
-2. 框架预设会自动识别为 **Next.js**，构建命令与输出目录保持默认即可（无需额外配置）
-3. 在 **Settings → Environment Variables** 中添加 `.env.local` 中的三个变量（Production / Preview / Development 均可勾选）：
-   - `NEXT_PUBLIC_SUPABASE_URL`
-   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-   - `SUPABASE_SERVICE_ROLE_KEY`
-4. 点击 **Deploy** 完成首次部署
-5. 部署完成后，在 Supabase → Authentication → URL Configuration 将 Vercel 域名加入允许列表
-6. 后续每次 `git push` 自动触发重新部署
+### 步骤四：构建并启动
 
-> Vercel 原生支持 Next.js，API Route 默认运行在 Node.js Serverless 函数上，无需额外适配。图片优化、缓存、环境变量均由 Vercel 自动处理。
+```bash
+docker compose up -d --build
+```
 
-> **关于国内访问：** Vercel 默认的 `*.vercel.app` 域名在中国大陆访问不稳定。如需稳定的国内访问，建议绑定自定义域名；Supabase 服务器位于海外，数据库延迟亦会影响访问体验。
+逐层验证，别一上来就试浏览器：
+
+```bash
+docker compose ps                                     # 四个容器均应 running
+docker compose logs db | grep -iE "error|fatal"
+docker compose exec db psql -U postgres -d jewelry -c '\dt'   # 应列出业务表
+docker compose logs postgrest
+
+# 持 service_role token 直接问 PostgREST
+set -a && source .env && set +a
+docker compose exec gateway wget -qO- \
+  --header="Authorization: Bearer $SERVICE_ROLE_KEY" \
+  "http://postgrest:3000/products?limit=1"
+
+curl -I http://127.0.0.1:3000                         # 200 或 307 即正常
+```
+
+常见故障：
+
+| 现象 | 原因与处置 |
+|---|---|
+| PostgREST 返回 401 `JWSError` | `JWT_SECRET` 与签发 token 的不一致，`docker compose up -d --force-recreate postgrest` |
+| 返回 404 | 表不存在或未授权，查 `02-grants.sql` 是否执行 |
+| `password authentication failed` 或 `role "authenticated" does not exist` | 数据卷是用旧密码初始化的。初始化脚本**仅在卷为空时执行一次**，需 `docker compose down -v` 后重建（会清空数据） |
+
+### 步骤五：宿主机 Nginx 与 HTTPS
+
+`web` 只监听 `127.0.0.1:3000`，公网流量必须经宿主机 Nginx 进来：
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name your-domain.com;
+
+    ssl_certificate     /etc/letsencrypt/live/your-domain.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/your-domain.com/privkey.pem;
+
+    client_max_body_size 12M;   # 上传上限 10MB，留出 multipart 编码开销
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 300s;
+    }
+}
+```
+
+`X-Forwarded-Proto` 不能缺——Next.js 靠它判断外部是否为 HTTPS，否则重定向会退化成 `http://`。
+
+证书用 `sudo certbot --nginx -d your-domain.com` 签发。
+
+> **大陆节点必须先完成 ICP 备案**，否则运营商会拦截 80/443 上的域名访问，certbot 的 HTTP-01 验证也会失败。备案期间可先用 IP + 自签证书跑起来（自签证书的 `subjectAltName` 必须写 `IP:x.x.x.x`，否则 Chrome 不给“继续访问”入口）。
+>
+> 注意登录 Cookie 带 `secure` 标志（生产环境下），**纯 HTTP 访问会导致登录后立即被踢回登录页**，因此即使临时方案也必须上 HTTPS。
+
+### 步骤六：上线前加固
+
+1. **立即修改初始超管密码**（`princejia@gmail.com` / `123456`）——那个 bcrypt 哈希在 Git 历史里是公开的
+2. 确认匿名访问被拦：`curl -i https://your-domain.com/api/customers` 应返回 `401`
+3. 配置定时备份：`scripts/backup-db.sh` 用 `coscli` 把 `pg_dump` 产物传到 COS，加入 crontab
+
+```bash
+0 3 * * * cd /opt/jewelry && ./scripts/backup-db.sh >> /var/log/jewelry-backup.log 2>&1
+```
+
+### 代码更新
+
+```bash
+cd /opt/jewelry
+git pull
+docker compose up -d --build
+```
+
+数据卷 `db-data` 不受重建影响。若改了 `schema.sql`，需手写迁移 SQL 并用 `docker compose exec db psql` 执行——`docker-entrypoint-initdb.d` 里的脚本只在卷为空时跑一次。
+
+> **国内服务器访问 GitHub / Docker Hub 可能超时。** 若 `git pull` 卡住，可把仓库同步一份到 Gitee 或腾讯云 CODING；若拉镜像失败，在 `/etc/docker/daemon.json` 配 `registry-mirrors` 指向 `https://mirror.ccs.tencentyun.com`（腾讯云内网可达）。
 
 ### 成本估算
 
-| 服务 | 免费套餐限制 | 月费用 | 超出后价格 |
-|------|-------------|--------|-----------|
-| Supabase DB | 500MB 存储 | $0 | $25/月（Pro）|
-| Supabase Storage | 1GB 图片存储 | $0 | $0.021/GB |
-| Supabase Auth | 50,000 MAU | $0 | 含在 Pro 套餐 |
-| Cloudflare/Vercel 部署 | Vercel Hobby：100GB 带宽/月 | $0 | Pro $20/月 |
-| **合计（小型珠宝店）** | 通常足够 | **¥0/月** | 数据量大时约 $45/月 |
+| 项目 | 规格 | 月费用 |
+|------|------|--------|
+| 腾讯云轻量应用服务器 | 2C2G 4M 带宽 | 约 ¥60（包年更低） |
+| 腾讯云 COS | 存储 + 外网下行流量 | 小店体量通常 <¥5 |
+| 域名 | `.top` 续费 | 约 ¥5/月 |
+| SSL 证书 | Let's Encrypt | ¥0 |
+| **合计** | | **约 ¥70/月** |
+
+数据库、认证、REST 层均为自托管，不随用量增长产生额外订阅费用；代价是需要自己负责备份与升级。
 
 ---
 
 ## 八、安全与权限设计
 
-### 8.1 Supabase RLS（行级安全策略）
+### 8.1 数据库角色与授权
+
+容器首次启动时，`supabase/init/00-roles.sh` 创建与 Supabase 同名的四个角色：
+
+| 角色 | 用途 | 授权 |
+|---|---|---|
+| `authenticator` | PostgREST 的连库账号，根据 JWT 的 `role` 声明 `SET ROLE` | 无表权限，仅可切换到下面三个角色 |
+| `anon` | 未携带有效 token 时的默认角色 | **没有任何表授权** |
+| `authenticated` | 预留 | 无 |
+| `service_role` | 应用服务端唯一使用的角色 | `GRANT ALL`，带 `BYPASSRLS` |
 
 ```sql
--- 启用 RLS
-ALTER TABLE products ENABLE ROW LEVEL SECURITY;
-ALTER TABLE customers ENABLE ROW LEVEL SECURITY;
-ALTER TABLE product_sales ENABLE ROW LEVEL SECURITY;
+-- supabase/init/02-grants.sql（节选）
+GRANT ALL ON ALL TABLES    IN SCHEMA public TO service_role;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO service_role;
+GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO service_role;
 
--- 已登录用户可读取所有产品
-CREATE POLICY "Authenticated users can read products"
-  ON products FOR SELECT
-  TO authenticated USING (true);
-
--- 已登录用户可写入产品
-CREATE POLICY "Authenticated users can write products"
-  ON products FOR ALL
-  TO authenticated USING (true) WITH CHECK (true);
-
--- 客户表同样配置
-CREATE POLICY "Authenticated users can manage customers"
-  ON customers FOR ALL
-  TO authenticated USING (true) WITH CHECK (true);
-
--- 销售记录同样配置
-CREATE POLICY "Authenticated users can manage sales"
-  ON product_sales FOR ALL
-  TO authenticated USING (true) WITH CHECK (true);
-
--- 退货记录同样配置
-ALTER TABLE product_returns ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Authenticated users can manage returns"
-  ON product_returns FOR ALL
-  TO authenticated USING (true) WITH CHECK (true);
-
--- 借调记录同样配置
-ALTER TABLE item_loans ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Authenticated users can manage loans"
-  ON item_loans FOR ALL
-  TO authenticated USING (true) WITH CHECK (true);
-
--- Storage：已登录用户可上传图片
-CREATE POLICY "Authenticated users can upload images"
-  ON storage.objects FOR INSERT
-  TO authenticated WITH CHECK (bucket_id = 'product-images');
-
--- 任何人可读取图片（因为是 Public Bucket）
-CREATE POLICY "Anyone can read product images"
-  ON storage.objects FOR SELECT
-  USING (bucket_id = 'product-images');
+NOTIFY pgrst, 'reload schema';
 ```
+
+> **这里有个关键的安全前提需要说清楚。** 项目未使用 RLS 作为安全边界——因为所有数据访问都走 `service_role`，而它 `BYPASSRLS`，RLS 策略对它无效。真正的边界是两道：
+>
+> 1. `service_role` 密钥只存在于服务端，永不下发浏览器；`postgrest` 容器也不对外暴露端口
+> 2. `middleware.ts` 在入口处拦住所有未登录请求，**包括 `/api`**
+>
+> `anon` 角色不给任何表授权是第三道兜底：即使有人直接触达到 PostgREST，没有有效 token 也读不到任何数据。
 
 ### 8.2 API 安全规范
 
-- 所有 API Routes 在服务端使用 `service_role key`，不暴露给前端
-- 使用 Supabase Auth 中间件验证用户 Session，未登录返回 401
+- 所有 API Routes 在服务端使用 `service_role` 密钥，不暴露给前端
+- `middleware.ts` 统一校验会话，未登录的 API 请求返回 401，页面请求重定向至 `/login`
 - 图片/文档上传限制：单文件最大 10MB，允许 jpg/png/webp 图片及 PDF/Word 文档
+- 对象键由 `randomUUID()` 加**根据 MIME 类型推导的扩展名**拼成，用户文件名不参与构造，避免路径穿越与伪造扩展名
+- 文档类型强制 `ContentDisposition: attachment`，避免在 COS 域名下直接渲染
 - 使用 `zod` 对请求体进行 Schema 校验，防止恶意数据写入
-- 生产环境强制 HTTPS（Vercel 自动配置）
+- 登录接口对“用户不存在”与“密码错误”返回同一提示，不泄露账号是否存在
+- `AUTH_SECRET` 在生产环境缺失时直接抛错，不退化到默认密钥
+- 会话 Cookie 为 `httpOnly` + `sameSite=lax` + 生产环境 `secure`，因此生产必须跑在 HTTPS 下
+- Next.js 版本需 ≥ 14.2.25，以修复 CVE-2025-29927（通过 `x-middleware-subrequest` 头绕过 middleware）
 
 ### 8.3 `middleware.ts` — 路由鉴权
 
 ```typescript
-import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs'
 import { NextRequest, NextResponse } from 'next/server'
+import { AUTH_COOKIE, verifySession } from '@/lib/auth'
+
+const PUBLIC_API = new Set(['/api/auth/login', '/api/auth/logout'])
 
 export async function middleware(req: NextRequest) {
-  const res = NextResponse.next()
-  const supabase = createMiddlewareClient({ req, res })
+  const { pathname } = req.nextUrl
+  const session = await verifySession(req.cookies.get(AUTH_COOKIE)?.value)
 
-  const { data: { session } } = await supabase.auth.getSession()
+  // API 返回 401，不重定向——重定向会让 fetch 拿到登录页 HTML 而非错误码
+  if (pathname.startsWith('/api/')) {
+    if (PUBLIC_API.has(pathname) || session) return NextResponse.next()
+    return NextResponse.json({ error: '未登录或会话已过期' }, { status: 401 })
+  }
 
-  // 未登录用户重定向到登录页
-  if (!session && !req.nextUrl.pathname.startsWith('/login')) {
+  // /v/ 为扫码公开展示页，不含价格，免登录
+  if (!session && !pathname.startsWith('/login') && !pathname.startsWith('/v/')) {
     return NextResponse.redirect(new URL('/login', req.url))
   }
 
-  // 已登录用户访问登录页，重定向到首页
-  if (session && req.nextUrl.pathname === '/login') {
+  if (session && pathname === '/login') {
     return NextResponse.redirect(new URL('/', req.url))
   }
 
-  return res
+  return NextResponse.next()
 }
 
 export const config = {
-  matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
 }
 ```
+
+> **matcher 里绝不能再出现 `api|`。** 早期版本沿用了 Next.js 文档里的示例 matcher，它把 `/api` 排除在外。当时只有用户管理接口自己做了权限校验，其余十几个业务路由全部裸奔，且都用 `service_role` 访问数据库——意味着任何人 `curl https://域名/api/customers` 就能拿到全部客户信息，或者直接 `DELETE` 掉任意产品。
 
 ---
 
@@ -1231,11 +1312,11 @@ export const config = {
 
 ### 9.1 推荐开发顺序
 
-1. **环境搭建** — Supabase 项目 + Next.js 初始化，跑通基础连接
-2. **数据库** — 执行建表 SQL，在 Supabase Studio 手动测试增删改查
-3. **认证** — 实现登录/登出页面，验证 middleware 鉴权生效
+1. **环境搭建** — `docker compose up -d db postgrest gateway` 起数据层，Next.js 用 `npm run dev` 跑在宿主机
+2. **数据库** — 核对 `schema.sql` 建表结果，用 `docker compose exec db psql` 手动测试增删改查
+3. **认证** — 实现登录/登出页面，验证 middleware 鉴权生效（含 `/api` 返回 401）
 4. **产品 CRUD** — 产品列表、新增、编辑、删除的 API + 页面
-5. **图片上传** — 实现多图上传至 Storage，集成到产品表单
+5. **图片上传** — 实现多图上传至 COS，集成到产品表单
 6. **仪表盘** — 统计数据查询与卡片展示
 7. **财务报表** — 图表与数据导出功能
 
@@ -1245,20 +1326,21 @@ export const config = {
 
 ```
 基于此文档，请帮我实现 [具体功能]。
-技术栈：Next.js 14 App Router + TypeScript + Tailwind CSS + shadcn/ui + Supabase。
+技术栈：Next.js 14 App Router + TypeScript + Tailwind CSS + shadcn/ui，
+数据层为自建 PostgreSQL + PostgREST，服务端用 @supabase/supabase-js 以 service_role 访问。
 请严格按照文档中的类型定义、API 路径和数据库字段命名。
 ```
 
 ### 9.3 后续扩展方向
 
 - **移动端适配** — 使用 Tailwind 响应式类，支持手机端浏览管理
-- **微信小程序** — 使用 Taro 框架复用业务逻辑，连接相同 Supabase 后端
+- **路由级鉴权** — 目前鉴权是**单点**，全压在 middleware 上。建议在各业务路由内再加一道会话校验作为纵深防御
 - **条码/二维码** — 每件产品生成唯一 QR Code，扫码快速查询库存
 - **Excel 导出** — 使用 `exceljs` 库导出产品/裸石库存清单（首张图片嵌入第一列），`xlsx` 用于财务报表
-- **消息提醒** — 未结款超期通过邮件自动提醒（Supabase Edge Functions）
-- **多用户角色** — 区分管理员和销售员权限（通过 Supabase RLS 扩展实现）
-- **数据备份** — 定时备份 PostgreSQL 数据到 Google Drive
+- **消息提醒** — 未结款超期自动提醒
+- **多用户角色** — 当前区分超管与普通用户，可进一步细化到字段级权限
+- **数据备份** — `scripts/backup-db.sh` 定时 `pg_dump` 并上传至 COS，建议额外保留一份异地副本
 
 ---
 
-*珠宝黄金销售管理系统 · 技术设计文档 v1.3*
+*珠宝黄金销售管理系统 · 技术设计文档 v2.0*
