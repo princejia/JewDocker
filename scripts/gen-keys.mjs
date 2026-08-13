@@ -47,6 +47,11 @@ SERVICE_ROLE_KEY=${serviceRoleKey}
 # 会话 cookie 签名密钥，与上面的 JWT_SECRET 无关，不要复用
 AUTH_SECRET=${rand(32)}
 
+# 首次登录时自动创建的超管账号。登录后请立即在后台修改密码，
+# 并把这两行从 .env 删除（账号已存在后它们不再起作用）
+SEED_ADMIN_USERNAME=admin
+SEED_ADMIN_PASSWORD=${rand(9)}
+
 # 腾讯云 COS（在控制台创建存储桶与子账号后填写）
 # COS_BUCKET 必须带 APPID 后缀，如 jewelry-1300000000
 COS_REGION=ap-guangzhou

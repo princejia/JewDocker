@@ -343,12 +343,5 @@ CREATE TABLE IF NOT EXISTS app_users (
 ALTER TABLE app_users ENABLE ROW LEVEL SECURITY;
 -- 不创建任何 policy：anon/authenticated 一律拒绝，只有 service_role 可读写。
 
--- 初始超级管理员：用户名 princejia@gmail.com，密码 123456（bcrypt）
--- 如需修改密码，请通过应用后台或重新生成 bcrypt 哈希。
-INSERT INTO app_users (username, password_hash, role)
-VALUES (
-  'princejia@gmail.com',
-  '$2b$10$gdbDVLCEHUcUsPu46bZCW.pKE263HLgQyoDFu5B5H/vL2U6hLo8sC',
-  'super_admin'
-)
-ON CONFLICT (username) DO NOTHING;
+-- 不在此处插入初始账号：建表脚本在仓库里是公开的，写死的 bcrypt 哈希等同于公开密码。
+-- 初始超管由应用首次登录时根据 SEED_ADMIN_USERNAME / SEED_ADMIN_PASSWORD 创建。

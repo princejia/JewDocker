@@ -59,6 +59,9 @@ services:
       SUPABASE_URL: http://gateway
       SUPABASE_SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY:?}
       AUTH_SECRET: ${AUTH_SECRET:?}
+      # 仅用于首次创建超管，账号建好后可从 .env 移除
+      SEED_ADMIN_USERNAME: ${SEED_ADMIN_USERNAME:-}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-}
       COS_REGION: ${COS_REGION:?}
       COS_BUCKET: ${COS_BUCKET:?}
       COS_SECRET_ID: ${COS_SECRET_ID:?}

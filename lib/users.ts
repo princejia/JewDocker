@@ -44,18 +44,29 @@ export async function requireSuperAdmin(): Promise<SessionPayload | null> {
 }
 
 /**
- * 兜底创建初始超级管理员：当 app_users 表为空时，
- * 自动写入 princejia@gmail.com / 123456，确保首次可登录。
+ * 当 app_users 为空时，根据环境变量创建初始超管。
+ * 刻意不提供默认密码：未配置时宁可无法登录，也不能落下一个人人知晓的账号。
  */
 export async function ensureSeedAdmin(): Promise<void> {
+  const username = process.env.SEED_ADMIN_USERNAME;
+  const password = process.env.SEED_ADMIN_PASSWORD;
+
   const supabase = createServerClient();
   const { count } = await supabase
     .from("app_users")
     .select("id", { count: "exact", head: true });
   if ((count ?? 0) > 0) return;
-  const password_hash = await hashPassword("123456");
+
+  if (!username || !password) {
+    console.warn(
+      "[auth] app_users 为空且未配置 SEED_ADMIN_USERNAME / SEED_ADMIN_PASSWORD，无法创建初始账号"
+    );
+    return;
+  }
+
+  const password_hash = await hashPassword(password);
   await supabase.from("app_users").insert({
-    username: "princejia@gmail.com",
+    username,
     password_hash,
     role: "super_admin",
   });

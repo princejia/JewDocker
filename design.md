@@ -593,7 +593,7 @@ jewelry-system/
 - **会话校验**：`middleware.ts` 在 Edge 运行时用 jose 校验 Cookie 中的 JWT；未登录跳 `/login`（`/v/` 公开页除外）
 - **角色**：`super_admin`（超级管理员）/ `user`（普通用户）
 - **账号管理页 `/users`**：仅 `super_admin` 可见与访问，可新增账号、删除账号（不可删除当前登录账号）、重置密码、设置角色
-- **初始超级管理员**：用户名 `princejia@gmail.com`，密码 `123456`（首次登录时若 `app_users` 为空会自动兜底创建；建议登录后立即修改密码）
+- **初始超级管理员**：仓库不内置任何账号。当 `app_users` 为空且配置了 `SEED_ADMIN_USERNAME` / `SEED_ADMIN_PASSWORD` 时，首次登录会据此创建超管；未配置则不创建，**没有默认密码**。密码由 `scripts/gen-keys.mjs` 随机生成写入 `.env`，登录后应立即在后台修改并从 `.env` 删除这两行
 - **密码安全**：仅存储 bcrypt 哈希，登录失败统一提示「用户名或密码错误」，避免暴露账号是否存在
 - `app_users` 表启用 RLS 且不设任何 policy，仅服务端 service_role 可读写
 
@@ -1101,6 +1101,7 @@ mv .env.new .env && chmod 600 .env
 | `JWT_SECRET` | PostgREST 校验 Bearer token 的密钥 |
 | `ANON_KEY` / `SERVICE_ROLE_KEY` | 由 `JWT_SECRET` 签发的 HS256 token，`role` 声明决定数据库角色 |
 | `AUTH_SECRET` | 应用会话 Cookie 的签名密钥，**与 `JWT_SECRET` 无关，不要复用** |
+| `SEED_ADMIN_USERNAME` / `SEED_ADMIN_PASSWORD` | 首次登录时创建超管用的账号密码，密码每次生成都不同 |
 
 ### 步骤三：配置对象存储
 
@@ -1193,7 +1194,7 @@ server {
 
 ### 步骤六：上线前加固
 
-1. **立即修改初始超管密码**（`princejia@gmail.com` / `123456`）——那个 bcrypt 哈希在 Git 历史里是公开的
+1. **首次登录后立即修改超管密码**，并把 `SEED_ADMIN_USERNAME` / `SEED_ADMIN_PASSWORD` 从 `.env` 删除（账号已存在后它们不再生效）
 2. 确认匿名访问被拦：`curl -i https://your-domain.com/api/customers` 应返回 `401`
 3. 配置定时备份：`scripts/backup-db.sh` 用 `coscli` 把 `pg_dump` 产物传到 COS，加入 crontab
 

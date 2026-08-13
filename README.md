@@ -55,7 +55,7 @@ npm run dev
 
 访问 http://localhost:3000
 
-首次启动会自动创建超级管理员 `princejia@gmail.com` / `123456`，**上线前必须改掉**。
+首次登录前需在 `.env.local` 里设好 `SEED_ADMIN_USERNAME` 与 `SEED_ADMIN_PASSWORD`，应用会在 `app_users` 为空时用它们创建超管。两项未配置则不创建任何账号——**没有默认密码**。
 
 ## 生产部署
 
@@ -116,5 +116,6 @@ docker-compose.yml      四容器编排
 
 - `middleware.ts` 的 matcher **覆盖 `/api`**。所有业务路由都用 `service_role` 访问数据库（BYPASSRLS），一旦把 `/api` 排除在鉴权外，任何人都能匿名读取全部客户与库存数据。
 - 数据库的 `anon` 角色没有任何表授权，即使 PostgREST 被直接触达也读不到数据。
+- 仓库内不包含任何可用凭据：建表脚本不插入账号，初始超管密码由 `gen-keys.mjs` 随机生成，每次部署不同。
 - 上传接口只按 MIME 类型推导扩展名，用户文件名不参与对象键构造。
 - `AUTH_SECRET` 在生产环境缺失时直接启动失败，不会静默降级。
