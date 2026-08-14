@@ -194,6 +194,9 @@ ALTER TABLE loose_stones ADD COLUMN IF NOT EXISTS sale_status      sale_status_e
 ALTER TABLE product_sales ADD COLUMN IF NOT EXISTS loose_stone_id UUID REFERENCES loose_stones(id) ON DELETE CASCADE;
 CREATE INDEX IF NOT EXISTS idx_product_sales_loose_stone ON product_sales(loose_stone_id);
 
+-- 销售备注
+ALTER TABLE product_sales ADD COLUMN IF NOT EXISTS notes TEXT;
+
 -- ------------------------------------------------------------
 -- 借调记录表（产品与裸石均可借调）
 -- ------------------------------------------------------------

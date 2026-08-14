@@ -22,13 +22,12 @@ export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
+  const [exporting, setExporting] = useState<"excel" | "pdf" | null>(null);
 
-  const fetchProducts = useCallback(async () => {
-    setLoading(true);
+  const buildFilterParams = useCallback(() => {
     const params = new URLSearchParams();
-    params.set("page", String(page));
-    params.set("limit", "20");
     if (filters.search) params.set("search", filters.search);
     if (filters.status !== "all") params.set("status", filters.status);
     if (filters.is_loose_stone !== "all")
@@ -37,25 +36,86 @@ export default function ProductsPage() {
     if (filters.price_max) params.set("price_max", filters.price_max);
     params.set("sort_by", filters.sort_by);
     params.set("order", filters.order);
+    return params;
+  }, [filters]);
+
+  const fetchProducts = useCallback(async () => {
+    setLoading(true);
+    const params = buildFilterParams();
+    params.set("page", String(page));
+    params.set("limit", "20");
 
     const res = await fetch(`/api/products?${params.toString()}`, {
       cache: "no-store",
     });
     const json: PaginatedResponse<Product> = await res.json();
     setProducts(json.data ?? []);
+    setTotal(json.total ?? 0);
     setTotalPages(json.totalPages ?? 1);
     setLoading(false);
-  }, [filters, page]);
+  }, [buildFilterParams, page]);
 
   useEffect(() => {
     const t = setTimeout(fetchProducts, 300);
     return () => clearTimeout(t);
   }, [fetchProducts]);
 
+  /** 按当前筛选条件抓取全部产品（接口单页上限 100，逐页拉取） */
+  const fetchAllProducts = useCallback(async () => {
+    const all: Product[] = [];
+    let current = 1;
+    let pages = 1;
+    do {
+      const params = buildFilterParams();
+      params.set("page", String(current));
+      params.set("limit", "100");
+      const res = await fetch(`/api/products?${params.toString()}`, {
+        cache: "no-store",
+      });
+      if (!res.ok) break;
+      const json: PaginatedResponse<Product> = await res.json();
+      all.push(...(json.data ?? []));
+      pages = json.totalPages ?? 1;
+      current += 1;
+    } while (current <= pages);
+    return all;
+  }, [buildFilterParams]);
+
+  async function handleExportExcel() {
+    setExporting("excel");
+    try {
+      exportProductsToExcel(await fetchAllProducts());
+    } finally {
+      setExporting(null);
+    }
+  }
+
+  async function handleExportLabels() {
+    setExporting("pdf");
+    try {
+      const all = await fetchAllProducts();
+      await saveLabelsPdf(
+        all.map((p) => ({
+          id: p.id,
+          code: p.code ?? formatProductCode("P", p.created_at),
+          name: p.name,
+          type: "product" as const,
+        })),
+      );
+    } finally {
+      setExporting(null);
+    }
+  }
+
   return (
     <div className="space-y-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">产品管理</h1>
+        <div className="flex items-baseline gap-2">
+          <h1 className="text-2xl font-bold text-gray-900">产品管理</h1>
+          {!loading && (
+            <span className="text-sm text-gray-500">共 {total} 件</span>
+          )}
+        </div>
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex rounded-md border bg-white">
             <button
@@ -79,27 +139,26 @@ export default function ProductsPage() {
           </div>
           <Button
             variant="outline"
-            onClick={() => exportProductsToExcel(products)}
-            disabled={products.length === 0}
+            onClick={handleExportExcel}
+            disabled={total === 0 || exporting !== null}
           >
-            <Download className="h-4 w-4" />
+            {exporting === "excel" ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="h-4 w-4" />
+            )}
             导出 Excel
           </Button>
           <Button
             variant="outline"
-            onClick={() =>
-              saveLabelsPdf(
-                products.map((p) => ({
-                  id: p.id,
-                  code: p.code ?? formatProductCode("P", p.created_at),
-                  name: p.name,
-                  type: "product" as const,
-                })),
-              )
-            }
-            disabled={products.length === 0}
+            onClick={handleExportLabels}
+            disabled={total === 0 || exporting !== null}
           >
-            <QrCode className="h-4 w-4" />
+            {exporting === "pdf" ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <QrCode className="h-4 w-4" />
+            )}
             标签 PDF
           </Button>
           <Button asChild>

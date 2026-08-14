@@ -7,6 +7,7 @@ import { Customer, ProductSaleWithRelations } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import {
   Select,
@@ -44,6 +45,7 @@ export function SaleRowActions({ sale }: { sale: ProductSaleWithRelations }) {
       : "sold"
   );
   const [soldAt, setSoldAt] = useState(sale.sold_at ?? "");
+  const [notes, setNotes] = useState(sale.notes ?? "");
 
   useEffect(() => {
     if (!editOpen) return;
@@ -68,6 +70,7 @@ export function SaleRowActions({ sale }: { sale: ProductSaleWithRelations }) {
         payment_method: paymentMethod || null,
         sold_at: soldAt || undefined,
         sale_status: saleStatus,
+        notes: notes.trim() || null,
       }),
     });
     setBusy(false);
@@ -173,6 +176,16 @@ export function SaleRowActions({ sale }: { sale: ProductSaleWithRelations }) {
                 type="date"
                 value={soldAt}
                 onChange={(e) => setSoldAt(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-sale-notes">备注</Label>
+              <Textarea
+                id="edit-sale-notes"
+                rows={3}
+                placeholder="销售备注（可选）"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
               />
             </div>
             {error && <p className="text-sm text-red-500">{error}</p>}

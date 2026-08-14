@@ -97,6 +97,7 @@ export interface ProductSale {
   sale_price: number;
   payment_method: string | null;
   sold_at: string;
+  notes: string | null;
   created_at: string;
 }
 

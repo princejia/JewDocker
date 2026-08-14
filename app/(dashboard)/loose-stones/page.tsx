@@ -95,7 +95,12 @@ export default function LooseStonesPage() {
   return (
     <div className="space-y-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">裸石管理</h1>
+        <div className="flex items-baseline gap-2">
+          <h1 className="text-2xl font-bold text-gray-900">裸石管理</h1>
+          {!loading && (
+            <span className="text-sm text-gray-500">共 {stones.length} 件</span>
+          )}
+        </div>
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex rounded-md border bg-white">
             <button

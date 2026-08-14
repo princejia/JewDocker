@@ -81,6 +81,7 @@ export async function POST(req: NextRequest) {
       sale_price: parsed.data.sale_price,
       payment_method: parsed.data.payment_method ?? null,
       sold_at: soldAt,
+      notes: parsed.data.notes ?? null,
     })
     .select()
     .single();

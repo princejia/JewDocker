@@ -7,6 +7,7 @@ import { Product, Customer, LooseStone } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -45,6 +46,7 @@ export function RecordSaleDialog() {
   const [salePrice, setSalePrice] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("");
   const [soldAt, setSoldAt] = useState(new Date().toISOString().slice(0, 10));
+  const [notes, setNotes] = useState("");
 
   useEffect(() => {
     if (!open) return;
@@ -91,6 +93,7 @@ export function RecordSaleDialog() {
     setCustomerId(NO_CUSTOMER);
     setSalePrice("");
     setPaymentMethod("");
+    setNotes("");
   }
 
   async function handleSubmit() {
@@ -115,6 +118,7 @@ export function RecordSaleDialog() {
         payment_method: paymentMethod || null,
         sold_at: soldAt,
         sale_status: saleType,
+        notes: notes.trim() || null,
       }),
     });
     setSaving(false);
@@ -264,6 +268,17 @@ export function RecordSaleDialog() {
               type="date"
               value={soldAt}
               onChange={(e) => setSoldAt(e.target.value)}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="sale-notes">备注</Label>
+            <Textarea
+              id="sale-notes"
+              rows={3}
+              placeholder="销售备注（可选）"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
             />
           </div>
 

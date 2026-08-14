@@ -66,6 +66,7 @@ export const saleSchema = z
     sale_price: z.coerce.number().nonnegative(),
     payment_method: z.string().max(50).nullable().optional(),
     sold_at: z.string().optional(),
+    notes: z.string().max(2000).nullable().optional(),
     sale_status: z.enum(["sold", "consignment"]).default("sold"),
   })
   .refine((d) => d.product_id || d.loose_stone_id, {

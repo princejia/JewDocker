@@ -81,13 +81,14 @@ export default async function SalesPage() {
               <TableHead className="text-right">成交价</TableHead>
               <TableHead>付款方式</TableHead>
               <TableHead>成交时间</TableHead>
+              <TableHead>备注</TableHead>
               <TableHead className="text-right">操作</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {sales.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="text-center text-gray-400">
+                <TableCell colSpan={9} className="text-center text-gray-400">
                   暂无销售记录
                 </TableCell>
               </TableRow>
@@ -127,6 +128,12 @@ export default async function SalesPage() {
                   </TableCell>
                   <TableCell>{s.payment_method || "-"}</TableCell>
                   <TableCell>{formatDate(s.sold_at)}</TableCell>
+                  <TableCell
+                    className="max-w-[200px] truncate text-gray-600"
+                    title={s.notes ?? undefined}
+                  >
+                    {s.notes || "-"}
+                  </TableCell>
                   <TableCell className="text-right">
                     <SaleRowActions sale={s} />
                   </TableCell>

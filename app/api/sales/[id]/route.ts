@@ -7,6 +7,7 @@ const saleUpdateSchema = z.object({
   sale_price: z.coerce.number().nonnegative().optional(),
   payment_method: z.string().max(50).nullable().optional(),
   sold_at: z.string().optional(),
+  notes: z.string().max(2000).nullable().optional(),
   sale_status: z.enum(["sold", "consignment"]).optional(),
 });
 
@@ -41,6 +42,7 @@ export async function PATCH(
       sale_price: parsed.data.sale_price,
       payment_method: parsed.data.payment_method,
       sold_at: parsed.data.sold_at,
+      notes: parsed.data.notes,
     })
     .eq("id", params.id)
     .select()
