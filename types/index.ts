@@ -18,6 +18,15 @@ export interface Product {
   inlaid_stones: string | null;
   gemstone_category: GemstoneCategory | null;
   function_category: ProductFunction | null;
+  supplier: string | null;
+  /** 工费销售价格 g/元（黄金专用） */
+  labor_sale_price: number | null;
+  /** 工费成本 g/元（黄金专用） */
+  labor_cost: number | null;
+  /** 附加费 g/元（黄金专用） */
+  surcharge: number | null;
+  /** 买入折扣（黄金专用） */
+  purchase_discount: number | null;
   source_loose_stone_id: string | null;
   price: number;
   purchase_price: number;
@@ -172,6 +181,11 @@ export type ProductInput = {
   inlaid_stones: string | null;
   gemstone_category: GemstoneCategory | null;
   function_category: ProductFunction | null;
+  supplier: string | null;
+  labor_sale_price: number | null;
+  labor_cost: number | null;
+  surcharge: number | null;
+  purchase_discount: number | null;
   source_loose_stone_id: string | null;
   price: number;
   purchase_price: number;

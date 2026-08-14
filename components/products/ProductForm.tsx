@@ -24,6 +24,7 @@ import {
   GEMSTONE_CATEGORY_SUGGESTIONS,
   PRODUCT_FUNCTION_SUGGESTIONS,
   categoryLabel,
+  isGoldCategory,
 } from "@/lib/constants";
 
 const ORIGIN_PRESETS = ["深圳水贝", "香港", "广州番禺", "周大福", "其他"];
@@ -46,6 +47,11 @@ function toFormState(p?: Product): ProductInput {
     inlaid_stones: p?.inlaid_stones ?? "",
     gemstone_category: p?.gemstone_category ?? null,
     function_category: p?.function_category ?? null,
+    supplier: p?.supplier ?? "",
+    labor_sale_price: p?.labor_sale_price ?? null,
+    labor_cost: p?.labor_cost ?? null,
+    surcharge: p?.surcharge ?? null,
+    purchase_discount: p?.purchase_discount ?? null,
     source_loose_stone_id: p?.source_loose_stone_id ?? null,
     price: p?.price ?? 0,
     purchase_price: p?.purchase_price ?? 0,
@@ -102,6 +108,16 @@ export function ProductForm({ initial }: ProductFormProps) {
   const unsettled = Number(form.price || 0) - Number(form.settled_amount || 0);
   const profit = Number(form.price || 0) - Number(form.purchase_price || 0);
 
+  const isGold = isGoldCategory(form.gemstone_category);
+  // 黄金计价：进货价按 g/元 计
+  const laborSubtotal =
+    Number(form.total_weight || 0) * Number(form.labor_cost || 0);
+  const surchargeSubtotal =
+    Number(form.surcharge || 0) * Number(form.purchase_discount || 0);
+  const goldPriceCost =
+    Number(form.total_weight || 0) * Number(form.purchase_price || 0);
+  const totalPurchaseCost = laborSubtotal + surchargeSubtotal + goldPriceCost;
+
   function set<K extends keyof ProductInput>(key: K, value: ProductInput[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
@@ -138,6 +154,11 @@ export function ProductForm({ initial }: ProductFormProps) {
       inlaid_stones: form.inlaid_stones || null,
       gemstone_category: form.gemstone_category || null,
       function_category: form.function_category || null,
+      supplier: form.supplier || null,
+      labor_sale_price: isGold ? form.labor_sale_price ?? null : null,
+      labor_cost: isGold ? form.labor_cost ?? null : null,
+      surcharge: isGold ? form.surcharge ?? null : null,
+      purchase_discount: isGold ? form.purchase_discount ?? null : null,
       source_loose_stone_id: fromLooseStone
         ? form.source_loose_stone_id || null
         : null,
@@ -283,6 +304,17 @@ export function ProductForm({ initial }: ProductFormProps) {
         </div>
 
         <div className="space-y-2">
+          <Label htmlFor="supplier">供应商</Label>
+          <Input
+            id="supplier"
+            value={form.supplier ?? ""}
+            maxLength={100}
+            onChange={(e) => set("supplier", e.target.value)}
+            placeholder="如：深圳水贝某某珠宝"
+          />
+        </div>
+
+        <div className="space-y-2">
           <Label htmlFor="price">价格 (¥) *</Label>
           <NumberInput
             id="price"
@@ -345,6 +377,90 @@ export function ProductForm({ initial }: ProductFormProps) {
           </div>
         </div>
       </div>
+
+      {/* 黄金专用计价 */}
+      {isGold && (
+        <div className="space-y-4 rounded-md border border-amber-200 bg-amber-50/40 p-4">
+          <h3 className="text-sm font-semibold text-amber-800">黄金计价</h3>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="labor_sale_price">工费销售价格 (g/元)</Label>
+              <NumberInput
+                id="labor_sale_price"
+                step="0.01"
+                value={form.labor_sale_price}
+                onChange={(v) => set("labor_sale_price", v)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="labor_cost">工费成本 (g/元)</Label>
+              <NumberInput
+                id="labor_cost"
+                step="0.01"
+                value={form.labor_cost}
+                onChange={(v) => set("labor_cost", v)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="surcharge">附加费 (g/元)</Label>
+              <NumberInput
+                id="surcharge"
+                step="0.01"
+                value={form.surcharge}
+                onChange={(v) => set("surcharge", v)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="purchase_discount">买入折扣</Label>
+              <NumberInput
+                id="purchase_discount"
+                step="0.0001"
+                value={form.purchase_discount}
+                onChange={(v) => set("purchase_discount", v)}
+                placeholder="如：0.95"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>工费小计 (¥)</Label>
+              <div className="flex h-10 items-center rounded-md border bg-gray-50 px-3 text-sm font-medium text-gray-700">
+                {formatCurrency(laborSubtotal)}
+              </div>
+              <p className="text-xs text-gray-400">重量 × 工费成本</p>
+            </div>
+
+            <div className="space-y-2">
+              <Label>附加费小计 (¥)</Label>
+              <div className="flex h-10 items-center rounded-md border bg-gray-50 px-3 text-sm font-medium text-gray-700">
+                {formatCurrency(surchargeSubtotal)}
+              </div>
+              <p className="text-xs text-gray-400">附加费 × 买入折扣</p>
+            </div>
+
+            <div className="space-y-2">
+              <Label>进货金价成本 (¥)</Label>
+              <div className="flex h-10 items-center rounded-md border bg-gray-50 px-3 text-sm font-medium text-gray-700">
+                {formatCurrency(goldPriceCost)}
+              </div>
+              <p className="text-xs text-gray-400">重量 × 进货价</p>
+            </div>
+
+            <div className="space-y-2">
+              <Label>进货总成本 (¥)</Label>
+              <div className="flex h-10 items-center rounded-md border bg-amber-100 px-3 text-sm font-semibold text-amber-800">
+                {formatCurrency(totalPurchaseCost)}
+              </div>
+              <p className="text-xs text-gray-400">
+                工费小计 + 附加费小计 + 进货金价成本
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 从现有裸石生产 */}
       <div className="space-y-3 rounded-md border border-gray-200 p-4">

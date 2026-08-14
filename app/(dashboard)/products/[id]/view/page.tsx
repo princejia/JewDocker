@@ -6,7 +6,7 @@ import { Product } from "@/types";
 import { Gallery } from "@/app/v/[type]/[id]/Gallery";
 import { BackButton } from "@/components/products/BackButton";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import { categoryLabel } from "@/lib/constants";
+import { categoryLabel, isGoldCategory } from "@/lib/constants";
 import { formatCurrency, formatDate, formatProductCode } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -28,6 +28,15 @@ export default async function ProductViewPage({
   if (!data) notFound();
   const product = data as Product;
 
+  const isGold = isGoldCategory(product.gemstone_category);
+  const laborSubtotal =
+    Number(product.total_weight || 0) * Number(product.labor_cost || 0);
+  const surchargeSubtotal =
+    Number(product.surcharge || 0) * Number(product.purchase_discount || 0);
+  const goldPriceCost =
+    Number(product.total_weight || 0) * Number(product.purchase_price || 0);
+  const totalPurchaseCost = laborSubtotal + surchargeSubtotal + goldPriceCost;
+
   const fields: Field[] = [
     {
       label: "重量",
@@ -38,6 +47,7 @@ export default async function ProductViewPage({
     },
     { label: "尺寸", value: product.size },
     { label: "产地", value: product.origin },
+    { label: "供应商", value: product.supplier },
     { label: "宝石分类", value: categoryLabel(product.gemstone_category) },
     { label: "功能分类", value: categoryLabel(product.function_category) },
     { label: "镶嵌配石", value: product.inlaid_stones },
@@ -45,6 +55,42 @@ export default async function ProductViewPage({
     { label: "进货价", value: formatCurrency(product.purchase_price) },
     { label: "出售价", value: formatCurrency(product.sale_price) },
     { label: "利润", value: formatCurrency(product.profit) },
+    ...(isGold
+      ? [
+          {
+            label: "工费销售价格 (g/元)",
+            value:
+              product.labor_sale_price != null
+                ? formatCurrency(product.labor_sale_price)
+                : null,
+          },
+          {
+            label: "工费成本 (g/元)",
+            value:
+              product.labor_cost != null
+                ? formatCurrency(product.labor_cost)
+                : null,
+          },
+          {
+            label: "附加费 (g/元)",
+            value:
+              product.surcharge != null
+                ? formatCurrency(product.surcharge)
+                : null,
+          },
+          {
+            label: "买入折扣",
+            value:
+              product.purchase_discount != null
+                ? String(product.purchase_discount)
+                : null,
+          },
+          { label: "工费小计", value: formatCurrency(laborSubtotal) },
+          { label: "附加费小计", value: formatCurrency(surchargeSubtotal) },
+          { label: "进货金价成本", value: formatCurrency(goldPriceCost) },
+          { label: "进货总成本", value: formatCurrency(totalPurchaseCost) },
+        ]
+      : []),
     { label: "购入时间", value: formatDate(product.purchased_at) },
     { label: "出售时间", value: formatDate(product.sold_at) },
     { label: "备注", value: product.notes },

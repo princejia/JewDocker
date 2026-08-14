@@ -190,6 +190,13 @@ ALTER TABLE loose_stones ADD COLUMN IF NOT EXISTS weight_unit      VARCHAR(20) D
 ALTER TABLE loose_stones ADD COLUMN IF NOT EXISTS certificate_urls TEXT[] DEFAULT '{}';
 ALTER TABLE loose_stones ADD COLUMN IF NOT EXISTS sale_status      sale_status_enum DEFAULT 'in_stock';
 
+-- 供应商（所有宝石分类通用）与黄金专用计价字段（幂等）
+ALTER TABLE products ADD COLUMN IF NOT EXISTS supplier          VARCHAR(100);
+ALTER TABLE products ADD COLUMN IF NOT EXISTS labor_sale_price  DECIMAL(12,2) DEFAULT 0; -- 工费销售价格 g/元
+ALTER TABLE products ADD COLUMN IF NOT EXISTS labor_cost        DECIMAL(12,2) DEFAULT 0; -- 工费成本 g/元
+ALTER TABLE products ADD COLUMN IF NOT EXISTS surcharge         DECIMAL(12,2) DEFAULT 0; -- 附加费 g/元
+ALTER TABLE products ADD COLUMN IF NOT EXISTS purchase_discount DECIMAL(12,4) DEFAULT 1; -- 买入折扣
+
 -- 销售记录支持裸石（product_id 已可空，新增 loose_stone_id）
 ALTER TABLE product_sales ADD COLUMN IF NOT EXISTS loose_stone_id UUID REFERENCES loose_stones(id) ON DELETE CASCADE;
 CREATE INDEX IF NOT EXISTS idx_product_sales_loose_stone ON product_sales(loose_stone_id);
