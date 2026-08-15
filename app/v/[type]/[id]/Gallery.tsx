@@ -42,7 +42,7 @@ export function Gallery({ images, title }: { images: string[]; title: string }) 
         <div className="flex gap-2 overflow-x-auto px-4 pt-4">
           {images.map((url, i) => (
             <button
-              key={url}
+              key={`thumb-${i}`}
               type="button"
               onClick={() => setActive(i)}
               className={`relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-xl border-2 transition ${
@@ -82,9 +82,9 @@ export function Gallery({ images, title }: { images: string[]; title: string }) 
               transition: dragging ? "none" : "transform 0.3s ease-out",
             }}
           >
-            {images.map((url) => (
+            {images.map((url, i) => (
               <div
-                key={url}
+                key={`slide-${i}`}
                 className="relative flex h-full w-full flex-shrink-0 items-center justify-center p-4"
               >
                 <Image
@@ -124,7 +124,7 @@ export function Gallery({ images, title }: { images: string[]; title: string }) 
               <div className="absolute bottom-6 left-0 right-0 flex justify-center gap-2">
                 {images.map((url, i) => (
                   <button
-                    key={url}
+                    key={`dot-${i}`}
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();

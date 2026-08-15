@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { createServerClient } from "@/lib/supabase-server";
 import { getCurrentSession } from "@/lib/users";
@@ -7,6 +8,17 @@ import { Product, LooseStone } from "@/types";
 import { Gallery } from "./Gallery";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  title: "C&F珠宝展示",
+  description: "C&F Jewelry item detail",
+};
+
+// 仅取展示所需列，避免把成本价 / 售价读进这个公开页面
+const PRODUCT_COLUMNS =
+  "id, code, name, image_urls, total_weight, weight_unit, size, origin, gemstone_category, function_category, inlaid_stones, created_at";
+const STONE_COLUMNS =
+  "id, code, material, image_urls, weight, weight_unit, size, origin, gemstone_category, certificate, created_at";
 
 type Field = { label: string; value: string | null | undefined };
 
@@ -27,7 +39,12 @@ export default async function PublicViewPage({
   // 未登录：展示清新页面（不含价格）
   const supabase = createServerClient();
   const table = type === "p" ? "products" : "loose_stones";
-  const { data } = await supabase.from(table).select("*").eq("id", id).single();
+  const columns = type === "p" ? PRODUCT_COLUMNS : STONE_COLUMNS;
+  const { data } = await supabase
+    .from(table)
+    .select(columns)
+    .eq("id", id)
+    .single();
   if (!data) notFound();
 
   let title: string;
@@ -36,7 +53,7 @@ export default async function PublicViewPage({
   let fields: Field[];
 
   if (type === "p") {
-    const p = data as Product;
+    const p = data as unknown as Product;
     title = p.name;
     code = p.code ?? formatProductCode("P", p.created_at);
     images = p.image_urls ?? [];
@@ -49,7 +66,7 @@ export default async function PublicViewPage({
       { label: "镶嵌配石", value: p.inlaid_stones },
     ];
   } else {
-    const s = data as LooseStone;
+    const s = data as unknown as LooseStone;
     title = s.material || "未命名裸石";
     code = s.code ?? formatProductCode("L", s.created_at);
     images = s.image_urls ?? [];

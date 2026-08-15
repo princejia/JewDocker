@@ -19,6 +19,7 @@ export async function middleware(req: NextRequest) {
   if (
     !session &&
     !pathname.startsWith("/login") &&
+    pathname !== "/v" &&
     !pathname.startsWith("/v/")
   ) {
     return NextResponse.redirect(new URL("/login", req.url));
