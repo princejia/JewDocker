@@ -16,6 +16,18 @@ const config: Config = {
       },
     },
     extend: {
+      fontFamily: {
+        cn: [
+          "-apple-system",
+          "BlinkMacSystemFont",
+          "Segoe UI",
+          "PingFang SC",
+          "Hiragino Sans GB",
+          "Microsoft YaHei",
+          "Noto Sans SC",
+          "sans-serif",
+        ],
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",

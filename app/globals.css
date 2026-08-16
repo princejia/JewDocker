@@ -42,3 +42,10 @@
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+
+/* 公开展示页：中性冷灰底 + 单一深绿强调色，颜色全部交给商品照片 */
+.showcase-theme {
+  --sc-accent: #1f3d34;
+  --sc-accent-soft: #eceff0;
+  --sc-accent-ring: rgba(31, 61, 52, 0.18);
+}

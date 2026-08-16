@@ -1,15 +1,21 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Gem,
-  Search,
-  Sparkles,
-  X,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type TouchEvent as ReactTouchEvent,
+} from "react";
+import {
   ChevronLeft,
   ChevronRight,
-  ZoomIn,
+  Gem,
+  Images,
+  Search,
+  X,
 } from "lucide-react";
 
 export type ShowcaseItem = {
@@ -17,65 +23,159 @@ export type ShowcaseItem = {
   type: "product" | "stone";
   code: string;
   name: string;
+  category: string | null;
   images: string[];
 };
 
 type Tab = "all" | "product" | "stone";
 
+/** 单批渲染数量：避免一次性挂载上千个 next/image 请求拖垮移动端首屏 */
+const PAGE_SIZE = 60;
+
+const TABS: { key: Tab; label: string }[] = [
+  { key: "all", label: "全部" },
+  { key: "product", label: "产品" },
+  { key: "stone", label: "裸石" },
+];
+
+const FOCUSABLE =
+  'button:not([disabled]), [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+
 export function CFShowcaseClient({
   products,
   stones,
-  headingClassName,
-  bodyClassName,
 }: {
   products: ShowcaseItem[];
   stones: ShowcaseItem[];
-  headingClassName: string;
-  bodyClassName: string;
 }) {
   const [query, setQuery] = useState("");
   const [tab, setTab] = useState<Tab>("all");
+  const [category, setCategory] = useState<string | null>(null);
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [activeItem, setActiveItem] = useState<ShowcaseItem | null>(null);
   const [activeImage, setActiveImage] = useState(0);
   const dialogRef = useRef<HTMLDivElement>(null);
   const lastFocusedRef = useRef<HTMLElement | null>(null);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const touchStartXRef = useRef<number | null>(null);
 
   const allItems = useMemo(() => [...products, ...stones], [products, stones]);
+  const totalCount = allItems.length;
+
+  const source = useMemo(
+    () => (tab === "product" ? products : tab === "stone" ? stones : allItems),
+    [allItems, products, stones, tab]
+  );
+
+  const categories = useMemo(() => {
+    const counts = new Map<string, number>();
+    source.forEach((item) => {
+      const key = item.category?.trim();
+      if (!key) return;
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    });
+    return [...counts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 12)
+      .map(([label]) => label);
+  }, [source]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-
-    const source =
-      tab === "product" ? products : tab === "stone" ? stones : allItems;
-
-    if (!q) return source;
-
     return source.filter((item) => {
-      const name = item.name.toLowerCase();
-      const code = item.code.toLowerCase();
-      return name.includes(q) || code.includes(q);
+      if (category && item.category?.trim() !== category) return false;
+      if (!q) return true;
+      return (
+        item.name.toLowerCase().includes(q) ||
+        item.code.toLowerCase().includes(q) ||
+        (item.category ?? "").toLowerCase().includes(q)
+      );
     });
-  }, [allItems, products, query, stones, tab]);
+  }, [category, query, source]);
+
+  const visible = useMemo(
+    () => filtered.slice(0, visibleCount),
+    [filtered, visibleCount]
+  );
+  const hasMore = visible.length < filtered.length;
+
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [category, query, tab]);
+
+  useEffect(() => {
+    if (category && !categories.includes(category)) setCategory(null);
+  }, [categories, category]);
+
+  useEffect(() => {
+    const node = sentinelRef.current;
+    if (!hasMore || !node || typeof IntersectionObserver === "undefined") return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          setVisibleCount((prev) => prev + PAGE_SIZE);
+        }
+      },
+      { rootMargin: "600px 0px" }
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [hasMore]);
+
+  const step = useCallback(
+    (delta: number) => {
+      const total = activeItem?.images.length ?? 0;
+      if (total < 2) return;
+      setActiveImage((prev) => (prev + delta + total) % total);
+    },
+    [activeItem]
+  );
+
+  const closePreview = useCallback(() => {
+    setActiveItem(null);
+    setActiveImage(0);
+  }, []);
 
   useEffect(() => {
     if (!activeItem) return;
 
-    const total = activeItem.images.length;
-
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        setActiveItem(null);
+        closePreview();
         return;
       }
-      if (total < 2) return;
       if (event.key === "ArrowLeft") {
-        setActiveImage((prev) => (prev - 1 + total) % total);
+        step(-1);
+        return;
       }
       if (event.key === "ArrowRight") {
-        setActiveImage((prev) => (prev + 1) % total);
+        step(1);
+        return;
+      }
+      if (event.key !== "Tab") return;
+
+      // 焦点锁在弹窗内，否则 Tab 会跑到背后的网格上
+      const root = dialogRef.current;
+      if (!root) return;
+      const nodes = Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE));
+      if (nodes.length === 0) {
+        event.preventDefault();
+        return;
+      }
+      const first = nodes[0];
+      const last = nodes[nodes.length - 1];
+      const active = document.activeElement;
+      if (event.shiftKey && (active === first || active === root)) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first.focus();
       }
     };
 
+    const restoreFocus = lastFocusedRef.current;
     window.addEventListener("keydown", onKeyDown);
     document.body.style.overflow = "hidden";
     dialogRef.current?.focus();
@@ -83,9 +183,9 @@ export function CFShowcaseClient({
     return () => {
       window.removeEventListener("keydown", onKeyDown);
       document.body.style.overflow = "";
-      lastFocusedRef.current?.focus();
+      restoreFocus?.focus();
     };
-  }, [activeItem]);
+  }, [activeItem, closePreview, step]);
 
   const openPreview = (item: ShowcaseItem) => {
     lastFocusedRef.current = document.activeElement as HTMLElement | null;
@@ -93,194 +193,282 @@ export function CFShowcaseClient({
     setActiveImage(0);
   };
 
-  const closePreview = () => {
-    setActiveItem(null);
-    setActiveImage(0);
+  const onTouchStart = (event: ReactTouchEvent) => {
+    touchStartXRef.current = event.changedTouches[0]?.clientX ?? null;
   };
 
-  const totalCount = allItems.length;
+  const onTouchEnd = (event: ReactTouchEvent) => {
+    const startX = touchStartXRef.current;
+    touchStartXRef.current = null;
+    if (startX === null) return;
+    const deltaX = (event.changedTouches[0]?.clientX ?? startX) - startX;
+    if (Math.abs(deltaX) < 48) return;
+    step(deltaX > 0 ? -1 : 1);
+  };
 
   return (
-    <main
-      className={`${bodyClassName} relative min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top,_#f7efe4_0%,_#fcfaf7_45%,_#f4f1ed_100%)] text-stone-900`}
-    >
-      <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute -top-24 left-1/2 h-72 w-72 -translate-x-1/2 rounded-full bg-amber-200/40 blur-3xl" />
-        <div className="absolute bottom-0 right-0 h-64 w-64 rounded-full bg-rose-200/30 blur-3xl" />
-      </div>
+    /* 圆角规则：面板与图片容器 rounded-2xl，嵌套小图 rounded-xl，可交互控件一律 rounded-full */
+    <main className="showcase-theme min-h-[100dvh] bg-zinc-50 font-cn text-zinc-900">
+      <header className="mx-auto w-full max-w-[1400px] px-4 pb-7 pt-10 sm:px-6 lg:px-8 lg:pt-14">
+        <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
+          C&amp;F 珠宝
+        </h1>
+        <p className="mt-3 max-w-xl text-sm leading-7 text-zinc-500">
+          公开展示目录，收录 {totalCount} 件产品与裸石实拍。点击任意图片查看大图与细节。
+        </p>
+      </header>
 
-      <section className="relative mx-auto w-full max-w-7xl px-4 pb-14 pt-10 sm:px-6 lg:px-8 lg:pt-14">
-        <div className="rounded-3xl border border-amber-100/70 bg-white/85 p-8 shadow-[0_20px_80px_-30px_rgba(120,86,34,0.35)] backdrop-blur">
-          <div className="flex flex-wrap items-start justify-between gap-6">
-            <div>
-              <p className="inline-flex items-center gap-2 rounded-full border border-amber-300/70 bg-amber-50 px-3 py-1 text-xs tracking-[0.2em] text-amber-800">
-                <Sparkles className="h-3.5 w-3.5" />
-                C&F JEWELRY COLLECTION
-              </p>
-              <h1
-                className={`${headingClassName} mt-4 text-4xl font-semibold leading-tight text-stone-900 sm:text-5xl`}
-              >
-                C&amp;F 珠宝
-              </h1>
-              <p className="mt-3 max-w-2xl text-sm leading-7 text-stone-600 sm:text-base">
-                公共展示主页，精选呈现产品与裸石。可按编号或名称检索，点击任意图片即可放大查看细节。
-              </p>
-            </div>
-
-            <div className="grid min-w-[220px] grid-cols-2 gap-3 text-center">
-              <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
-                <p className="text-xs tracking-wider text-stone-500">产品</p>
-                <p className="mt-1 text-2xl font-semibold text-stone-900">
-                  {products.length}
-                </p>
-              </div>
-              <div className="rounded-2xl border border-stone-200 bg-white px-4 py-3">
-                <p className="text-xs tracking-wider text-stone-500">裸石</p>
-                <p className="mt-1 text-2xl font-semibold text-stone-900">
-                  {stones.length}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-8 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div className="inline-flex rounded-full border border-stone-200 bg-stone-50 p-1">
-              {[
-                { key: "all", label: "全部" },
-                { key: "product", label: "产品" },
-                { key: "stone", label: "裸石" },
-              ].map((option) => (
+      <div className="sticky top-0 z-30 border-y border-zinc-200 bg-zinc-50/85 backdrop-blur">
+        <div className="mx-auto flex w-full max-w-[1400px] flex-wrap items-center gap-3 px-4 py-3 sm:px-6 lg:px-8">
+          <div
+            role="tablist"
+            aria-label="展示类型"
+            className="inline-flex rounded-full border border-zinc-200 bg-white p-1"
+          >
+            {TABS.map((option) => {
+              const selected = tab === option.key;
+              return (
                 <button
                   key={option.key}
                   type="button"
-                  onClick={() => setTab(option.key as Tab)}
-                  className={`rounded-full px-4 py-2 text-sm transition ${
-                    tab === option.key
-                      ? "bg-stone-900 text-white shadow"
-                      : "text-stone-600 hover:text-stone-900"
+                  role="tab"
+                  aria-selected={selected}
+                  onClick={() => setTab(option.key)}
+                  className={`rounded-full px-4 py-1.5 text-sm transition active:scale-[0.98] ${
+                    selected
+                      ? "bg-[var(--sc-accent)] text-white"
+                      : "text-zinc-600 hover:text-zinc-900"
                   }`}
                 >
                   {option.label}
                 </button>
-              ))}
-            </div>
-
-            <label className="relative block w-full max-w-md">
-              <span className="sr-only">搜索编号或名称</span>
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
-              <input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="搜索编号或名称"
-                className="h-11 w-full rounded-full border border-stone-200 bg-white pl-10 pr-4 text-sm outline-none transition focus:border-amber-500 focus:ring-2 focus:ring-amber-200"
-              />
-            </label>
+              );
+            })}
           </div>
+
+          <label className="relative block min-w-[180px] flex-1 sm:max-w-xs">
+            <span className="sr-only">搜索编号、名称或品类</span>
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="搜索编号、名称或品类"
+              className="h-10 w-full rounded-full border border-zinc-200 bg-white pl-9 pr-4 text-sm text-zinc-900 outline-none transition placeholder:text-zinc-500 focus:border-[var(--sc-accent)] focus:ring-2 focus:ring-[var(--sc-accent-ring)]"
+            />
+          </label>
+
+          <p
+            aria-live="polite"
+            className="ml-auto whitespace-nowrap text-sm text-zinc-500"
+          >
+            共 {filtered.length} 件
+          </p>
         </div>
+      </div>
 
-        <div className="mt-8 flex items-center justify-between text-sm text-stone-500">
-          <p>当前展示 {filtered.length} 件</p>
-          <p>总计 {totalCount} 件</p>
-        </div>
-
-        {filtered.length === 0 ? (
-          <div className="mt-6 rounded-3xl border border-dashed border-stone-300 bg-white/70 p-12 text-center">
-            <Gem className="mx-auto h-10 w-10 text-stone-400" />
-            <p className="mt-4 text-stone-600">未找到匹配结果，请更换关键词。</p>
-          </div>
-        ) : (
-          <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-            {filtered.map((item) => {
-              const cover = item.images[0];
-
+      <section className="mx-auto w-full max-w-[1400px] px-4 pb-20 pt-6 sm:px-6 lg:px-8">
+        {categories.length > 0 && (
+          <div className="-mx-1 mb-6 flex snap-x gap-2 overflow-x-auto px-1 pb-1">
+            <button
+              type="button"
+              onClick={() => setCategory(null)}
+              aria-pressed={category === null}
+              className={`snap-start whitespace-nowrap rounded-full border px-3 py-1.5 text-xs transition ${
+                category === null
+                  ? "border-[var(--sc-accent)] bg-[var(--sc-accent)] text-white"
+                  : "border-zinc-200 bg-white text-zinc-600 hover:text-zinc-900"
+              }`}
+            >
+              全部品类
+            </button>
+            {categories.map((label) => {
+              const selected = category === label;
               return (
                 <button
-                  key={`${item.type}-${item.id}`}
+                  key={label}
                   type="button"
-                  onClick={() => openPreview(item)}
-                  className="group overflow-hidden rounded-2xl border border-stone-200 bg-white text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg"
+                  onClick={() => setCategory(selected ? null : label)}
+                  aria-pressed={selected}
+                  className={`snap-start whitespace-nowrap rounded-full border px-3 py-1.5 text-xs transition ${
+                    selected
+                      ? "border-[var(--sc-accent)] bg-[var(--sc-accent)] text-white"
+                      : "border-zinc-200 bg-white text-zinc-600 hover:text-zinc-900"
+                  }`}
                 >
-                  <div className="relative aspect-square overflow-hidden bg-stone-100">
-                    {cover ? (
-                      <Image
-                        src={cover}
-                        alt={item.name}
-                        fill
-                        sizes="(max-width: 768px) 50vw, (max-width: 1200px) 25vw, 20vw"
-                        className="object-cover transition duration-500 group-hover:scale-105"
-                      />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-stone-100 to-amber-100 text-stone-400">
-                        <Gem className="h-10 w-10" />
-                      </div>
-                    )}
-
-                    <span className="absolute left-2 top-2 rounded-full bg-black/60 px-2 py-1 text-[10px] tracking-wider text-white">
-                      {item.type === "product" ? "产品" : "裸石"}
-                    </span>
-                    <span className="absolute bottom-2 right-2 inline-flex items-center gap-1 rounded-full bg-white/90 px-2 py-1 text-[10px] text-stone-700">
-                      <ZoomIn className="h-3 w-3" />
-                      放大
-                    </span>
-                  </div>
-
-                  <div className="p-3">
-                    <p className="font-mono text-[11px] tracking-wide text-stone-400">
-                      {item.code}
-                    </p>
-                    <p className="mt-1 line-clamp-2 text-sm font-medium leading-6 text-stone-900">
-                      {item.name}
-                    </p>
-                  </div>
+                  {label}
                 </button>
               );
             })}
           </div>
         )}
+
+        {totalCount === 0 ? (
+          <div className="rounded-2xl border border-dashed border-zinc-300 bg-white p-16 text-center">
+            <Gem className="mx-auto h-10 w-10 text-zinc-300" />
+            <p className="mt-4 text-zinc-600">目录还没有内容，稍后再来看看。</p>
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-zinc-300 bg-white p-16 text-center">
+            <Search className="mx-auto h-10 w-10 text-zinc-300" />
+            <p className="mt-4 text-zinc-600">
+              没有匹配「{query.trim() || category}」的结果。
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setQuery("");
+                setCategory(null);
+              }}
+              className="mt-5 rounded-full bg-[var(--sc-accent)] px-5 py-2 text-sm text-white transition active:translate-y-[1px]"
+            >
+              清除筛选
+            </button>
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+              {visible.map((item, index) => {
+                const cover = item.images[0];
+
+                return (
+                  <button
+                    key={`${item.type}-${item.id}`}
+                    type="button"
+                    onClick={() => openPreview(item)}
+                    className="group overflow-hidden rounded-2xl border border-zinc-200 bg-white text-left transition hover:border-zinc-300 hover:shadow-[0_14px_36px_-20px_rgba(24,24,27,0.5)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sc-accent)]"
+                  >
+                    <div className="relative aspect-square overflow-hidden bg-zinc-100">
+                      {cover ? (
+                        <Image
+                          src={cover}
+                          alt={item.name}
+                          fill
+                          sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, (max-width: 1280px) 25vw, 20vw"
+                          priority={index < 10}
+                          className="object-cover transition duration-500 group-hover:scale-[1.04]"
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center text-zinc-300">
+                          <Gem className="h-10 w-10" />
+                        </div>
+                      )}
+
+                      {tab === "all" && (
+                        <span className="absolute left-2 top-2 rounded-full bg-white/90 px-2 py-0.5 text-[10px] text-zinc-700">
+                          {item.type === "product" ? "产品" : "裸石"}
+                        </span>
+                      )}
+
+                      {item.images.length > 1 && (
+                        <span className="absolute bottom-2 right-2 inline-flex items-center gap-1 rounded-full bg-zinc-900/75 px-2 py-0.5 text-[10px] text-white">
+                          <Images className="h-3 w-3" />
+                          {item.images.length}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="p-3">
+                      <p className="font-mono text-[11px] tracking-wide text-zinc-400">
+                        {item.code}
+                      </p>
+                      <p className="mt-1 line-clamp-2 text-sm font-medium leading-6">
+                        {item.name}
+                      </p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {hasMore && (
+              <div ref={sentinelRef} className="mt-10 flex justify-center">
+                <button
+                  type="button"
+                  onClick={() => setVisibleCount((prev) => prev + PAGE_SIZE)}
+                  className="rounded-full border border-zinc-300 bg-white px-6 py-2.5 text-sm text-zinc-700 transition hover:border-[var(--sc-accent)] hover:text-[var(--sc-accent)] active:translate-y-[1px]"
+                >
+                  加载更多 · 剩余 {filtered.length - visible.length} 件
+                </button>
+              </div>
+            )}
+          </>
+        )}
       </section>
 
       {activeItem && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/90 p-3 sm:p-4"
           role="dialog"
           aria-modal="true"
-          aria-label="图片预览"
+          aria-label={`${activeItem.code} ${activeItem.name} 图片预览`}
           onClick={closePreview}
         >
           <div
             ref={dialogRef}
             tabIndex={-1}
-            className="relative flex h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-stone-950 outline-none"
+            className="relative flex h-[92dvh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-zinc-950 outline-none"
             onClick={(event) => event.stopPropagation()}
           >
             <button
               type="button"
               onClick={closePreview}
-              className="absolute right-3 top-3 z-10 rounded-full bg-black/60 p-2 text-white transition hover:bg-black"
+              className="absolute right-3 top-3 z-10 rounded-full bg-zinc-950/60 p-2 text-white transition hover:bg-zinc-950 active:scale-[0.96]"
               aria-label="关闭"
             >
               <X className="h-5 w-5" />
             </button>
 
-            <div className="relative flex-1 bg-black">
+            <div
+              className="relative flex-1 bg-black"
+              onTouchStart={onTouchStart}
+              onTouchEnd={onTouchEnd}
+            >
               {activeItem.images.length > 0 ? (
                 <Image
                   src={activeItem.images[activeImage]}
-                  alt={activeItem.name}
+                  alt={`${activeItem.name} 第 ${activeImage + 1} 张`}
                   fill
                   sizes="100vw"
                   className="object-contain"
                   priority
                 />
               ) : (
-                <div className="flex h-full w-full items-center justify-center text-stone-500">
+                <div className="flex h-full w-full items-center justify-center text-zinc-600">
                   <Gem className="h-12 w-12" />
                 </div>
               )}
+
+              {activeItem.images.length > 1 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => step(-1)}
+                    aria-label="上一张"
+                    className="absolute left-3 top-1/2 hidden -translate-y-1/2 rounded-full bg-zinc-950/50 p-2 text-white transition hover:bg-zinc-950 sm:inline-flex"
+                  >
+                    <ChevronLeft className="h-5 w-5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => step(1)}
+                    aria-label="下一张"
+                    className="absolute right-3 top-1/2 hidden -translate-y-1/2 rounded-full bg-zinc-950/50 p-2 text-white transition hover:bg-zinc-950 sm:inline-flex"
+                  >
+                    <ChevronRight className="h-5 w-5" />
+                  </button>
+
+                  <span
+                    aria-live="polite"
+                    className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-white/10 px-3 py-1 font-mono text-xs text-white backdrop-blur"
+                  >
+                    {activeImage + 1} / {activeItem.images.length}
+                  </span>
+                </>
+              )}
             </div>
 
-            <div className="border-t border-stone-800 bg-stone-950 p-4 text-white">
-              <p className="font-mono text-xs text-stone-400">{activeItem.code}</p>
+            <div className="border-t border-zinc-800 bg-zinc-950 p-4 text-white">
+              <p className="font-mono text-xs text-zinc-400">{activeItem.code}</p>
               <p className="mt-1 text-base">{activeItem.name}</p>
 
               {activeItem.images.length > 1 && (
@@ -290,15 +478,17 @@ export function CFShowcaseClient({
                       key={`${activeItem.id}-${index}`}
                       type="button"
                       onClick={() => setActiveImage(index)}
-                      className={`relative h-14 w-14 overflow-hidden rounded-lg border-2 ${
+                      aria-label={`查看第 ${index + 1} 张`}
+                      aria-current={index === activeImage}
+                      className={`relative h-14 w-14 shrink-0 overflow-hidden rounded-xl border-2 transition ${
                         index === activeImage
-                          ? "border-amber-400"
-                          : "border-transparent opacity-70"
+                          ? "border-white"
+                          : "border-transparent opacity-60 hover:opacity-100"
                       }`}
                     >
                       <Image
                         src={imageUrl}
-                        alt={`${activeItem.name} ${index + 1}`}
+                        alt=""
                         fill
                         sizes="56px"
                         className="object-cover"
@@ -308,37 +498,6 @@ export function CFShowcaseClient({
                 </div>
               )}
             </div>
-
-            {activeItem.images.length > 1 && (
-              <>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setActiveImage(
-                      (prev) =>
-                        (prev - 1 + activeItem.images.length) %
-                        activeItem.images.length
-                    )
-                  }
-                  className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full bg-black/50 p-2 text-white transition hover:bg-black"
-                  aria-label="上一张"
-                >
-                  <ChevronLeft className="h-5 w-5" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setActiveImage(
-                      (prev) => (prev + 1) % activeItem.images.length
-                    )
-                  }
-                  className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-black/50 p-2 text-white transition hover:bg-black"
-                  aria-label="下一张"
-                >
-                  <ChevronRight className="h-5 w-5" />
-                </button>
-              </>
-            )}
           </div>
         </div>
       )}
