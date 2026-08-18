@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { BeianFooter } from "@/components/layout/BeianFooter";
 import { createServerClient } from "@/lib/supabase-server";
 import { formatProductCode } from "@/lib/utils";
 import type { LooseStone, Product } from "@/types";
@@ -121,5 +122,10 @@ export default async function CFPublicShowcasePage() {
     images: toStringArray(item.image_urls),
   }));
 
-  return <CFShowcaseClient products={products} stones={stones} />;
+  return (
+    <>
+      <CFShowcaseClient products={products} stones={stones} />
+      <BeianFooter className="bg-zinc-50" />
+    </>
+  );
 }
