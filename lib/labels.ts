@@ -18,12 +18,20 @@ function buildQrPayload(item: LabelItem, origin: string): string {
   return `${origin}/v/${t}/${encodeURIComponent(item.id)}`;
 }
 
-// 单个标签尺寸（mm）
-const LABEL_W = 48;
-const LABEL_H = 30;
-const MARGIN = 8;
-const GAP = 4;
-const PX_PER_MM = 8; // 画布渲染精度（mm → px）
+// 单张标签尺寸（mm），对应 Godex G530 使用的 30×25mm 对折标
+// 折痕在 30mm 的正中间，两侧各为 15×25mm 的可见面，内容不得跨越折痕
+const LABEL_W = 30;
+const LABEL_H = 25;
+const FOLD_X = LABEL_W / 2;
+// 二维码占左半面，与折痕 / 标签边缘各留 1mm 的白边兼作静区
+const QR_SIZE = 13;
+const QR_X = (FOLD_X - QR_SIZE) / 2;
+const QR_Y = (LABEL_H - QR_SIZE) / 2;
+// 右半面文字区
+const TEXT_X = FOLD_X + 1;
+const TEXT_W = LABEL_W - TEXT_X - 1;
+// G530 为 300dpi（≈11.8 点/mm），画布按 12px/mm 渲染后略微缩小，边缘更锐利
+const PX_PER_MM = 12;
 
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -34,7 +42,22 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   });
 }
 
-/** 折行文本，超出宽度自动换行（中文逐字判断）。 */
+/** 单行截断，超出宽度补省略号。 */
+function truncate(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  maxWidth: number,
+): string {
+  if (ctx.measureText(text).width <= maxWidth) return text;
+  let out = "";
+  for (const ch of text) {
+    if (ctx.measureText(out + ch + "…").width > maxWidth) break;
+    out += ch;
+  }
+  return out + "…";
+}
+
+/** 折行文本（中文逐字判断），超出行数时末行补省略号。 */
 function wrapText(
   ctx: CanvasRenderingContext2D,
   text: string,
@@ -42,25 +65,33 @@ function wrapText(
   maxLines: number,
 ): string[] {
   const lines: string[] = [];
+  const chars = [...text];
   let line = "";
-  for (const ch of text) {
-    if (ctx.measureText(line + ch).width > maxWidth && line) {
+  for (let i = 0; i < chars.length; i++) {
+    const ch = chars[i];
+    if (line && ctx.measureText(line + ch).width > maxWidth) {
       lines.push(line);
-      line = ch;
-      if (lines.length >= maxLines - 1) break;
-    } else {
-      line += ch;
+      line = "";
+      if (lines.length >= maxLines - 1) {
+        lines.push(truncate(ctx, chars.slice(i).join(""), maxWidth));
+        return lines;
+      }
     }
+    line += ch;
   }
-  if (line && lines.length < maxLines) lines.push(line);
+  if (line) lines.push(line);
   return lines;
 }
 
 /**
- * 将单个标签渲染到 canvas（使用浏览器字体，支持中文，避免 PDF 内置字体乱码）。
- * 返回 PNG DataURL，再整体嵌入 PDF。
+ * 将单张标签渲染到 canvas（使用浏览器字体，支持中文，避免 PDF 内置字体乱码）。
+ * 版面：左半面二维码居中，右半面从上到下为编号与名称。返回 PNG DataURL。
  */
-async function renderLabelImage(qrDataUrl: string, code: string, name: string): Promise<string> {
+async function renderLabelImage(
+  qrDataUrl: string,
+  code: string,
+  name: string,
+): Promise<string> {
   const w = LABEL_W * PX_PER_MM;
   const h = LABEL_H * PX_PER_MM;
   const canvas = document.createElement("canvas");
@@ -70,66 +101,55 @@ async function renderLabelImage(qrDataUrl: string, code: string, name: string): 
   ctx.fillStyle = "#fff";
   ctx.fillRect(0, 0, w, h);
 
-  // 二维码
-  const qrSize = 20 * PX_PER_MM;
   const qrImg = await loadImage(qrDataUrl);
-  ctx.drawImage(qrImg, 3 * PX_PER_MM, (h - qrSize) / 2, qrSize, qrSize);
+  ctx.drawImage(
+    qrImg,
+    QR_X * PX_PER_MM,
+    QR_Y * PX_PER_MM,
+    QR_SIZE * PX_PER_MM,
+    QR_SIZE * PX_PER_MM,
+  );
 
-  // 文本
-  const textX = (3 + 20 + 3) * PX_PER_MM;
-  const textW = w - textX - 3 * PX_PER_MM;
+  const textX = TEXT_X * PX_PER_MM;
+  const textW = TEXT_W * PX_PER_MM;
   ctx.textBaseline = "top";
-  ctx.fillStyle = "#5a5a5a";
-  ctx.font = "600 14px 'Microsoft YaHei', sans-serif";
-  ctx.fillText(code, textX, 7 * PX_PER_MM, textW);
-  ctx.fillStyle = "#111";
-  ctx.font = "700 14px 'Microsoft YaHei', sans-serif";
-  const nameLines = wrapText(ctx, name, textW, 3);
-  nameLines.forEach((ln, i) => ctx.fillText(ln, textX, (12 + i * 5) * PX_PER_MM));
+  ctx.textAlign = "left";
+  ctx.fillStyle = "#000";
+
+  ctx.font = "600 15px 'Consolas', 'Microsoft YaHei', monospace";
+  ctx.fillText(truncate(ctx, code, textW), textX, 7 * PX_PER_MM);
+
+  ctx.font = "700 20px 'Microsoft YaHei', sans-serif";
+  wrapText(ctx, name, textW, 3).forEach((ln, i) => {
+    ctx.fillText(ln, textX, (10 + i * 2.5) * PX_PER_MM);
+  });
 
   return canvas.toDataURL("image/png");
 }
 
 /**
- * 为给定的产品/裸石生成标签 PDF 并下载保存。
- * 每个标签包含：二维码（编码展示页链接）、编号、名称，按 A4 网格排版，
- * 标签带虚线边框作为裁剪参考线。中文文本通过 canvas 渲染，避免乱码。
+ * 生成标签 PDF 并下载：每张标签独占一页，页面尺寸即标签尺寸，
+ * 打印时选 Godex 驱动、缩放设为「实际大小 / 100%」即可直接出纸。
  */
 export async function saveLabelsPdf(items: LabelItem[]): Promise<void> {
   if (items.length === 0) return;
 
   const origin = window.location.origin;
-  const doc = new jsPDF({ unit: "mm", format: "a4" });
-  const pageW = doc.internal.pageSize.getWidth();
-  const pageH = doc.internal.pageSize.getHeight();
-  const cols = Math.max(1, Math.floor((pageW - 2 * MARGIN + GAP) / (LABEL_W + GAP)));
-  const rows = Math.max(1, Math.floor((pageH - 2 * MARGIN + GAP) / (LABEL_H + GAP)));
-  const perPage = cols * rows;
+  const format: [number, number] = [LABEL_W, LABEL_H];
+  const doc = new jsPDF({ unit: "mm", format, orientation: "landscape" });
 
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
-    const idx = i % perPage;
-    if (i > 0 && idx === 0) doc.addPage();
+    if (i > 0) doc.addPage(format, "landscape");
 
-    const col = idx % cols;
-    const row = Math.floor(idx / cols);
-    const x = MARGIN + col * (LABEL_W + GAP);
-    const y = MARGIN + row * (LABEL_H + GAP);
-
-    // 虚线裁剪边框
-    doc.setDrawColor(160);
-    doc.setLineDashPattern([1, 1], 0);
-    doc.roundedRect(x, y, LABEL_W, LABEL_H, 1, 1);
-    doc.setLineDashPattern([], 0);
-
-    // 二维码 + 文本整体渲染为图片（中文不乱码）
     const qr = await QRCode.toDataURL(buildQrPayload(item, origin), {
+      // 静区交给标签上的 1mm 白边，此处不再额外留，以保证模块尽量大
       margin: 0,
-      width: 240,
+      width: 480,
       errorCorrectionLevel: "M",
     });
     const labelImg = await renderLabelImage(qr, item.code, item.name);
-    doc.addImage(labelImg, "PNG", x, y, LABEL_W, LABEL_H);
+    doc.addImage(labelImg, "PNG", 0, 0, LABEL_W, LABEL_H);
   }
 
   doc.save(`labels-${new Date().toISOString().slice(0, 10)}.pdf`);
