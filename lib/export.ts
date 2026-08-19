@@ -9,10 +9,21 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 /**
+ * COS 域名没有配置 CORS，跨域直取会让 canvas 污染 / 图片加载失败，
+ * 统一改走同源代理。
+ */
+function sameOriginUrl(url: string) {
+  return /^https?:\/\//i.test(url)
+    ? `/api/image-proxy?url=${encodeURIComponent(url)}`
+    : url;
+}
+
+/**
  * 将图片 URL 加载并转换为 PNG base64（去掉 data 前缀）。
  * 使用 canvas 归一化格式（兼容 jpeg/png/webp），失败时返回 null。
  */
-function loadImageAsPngBase64(url: string): Promise<string | null> {
+function loadImageAsPngBase64(rawUrl: string): Promise<string | null> {
+  const url = sameOriginUrl(rawUrl);
   return new Promise((resolve) => {
     const img = new Image();
     img.crossOrigin = "anonymous";
