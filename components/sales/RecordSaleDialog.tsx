@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
 import { Product, Customer, LooseStone } from "@/types";
+import { formatProductCode } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -197,6 +198,9 @@ export function RecordSaleDialog() {
                   ) : (
                     products.map((p) => (
                       <SelectItem key={p.id} value={p.id}>
+                        <span className="font-mono text-gray-500">
+                          {p.code ?? formatProductCode("P", p.created_at)}
+                        </span>{" "}
                         {p.name}（¥{Number(p.price).toLocaleString()}）
                       </SelectItem>
                     ))
@@ -208,6 +212,9 @@ export function RecordSaleDialog() {
                 ) : (
                   stones.map((s) => (
                     <SelectItem key={s.id} value={s.id}>
+                      <span className="font-mono text-gray-500">
+                        {s.code ?? formatProductCode("L", s.created_at)}
+                      </span>{" "}
                       {(s.material || "裸石") +
                         `（¥${Number(s.price).toLocaleString()}）`}
                     </SelectItem>
