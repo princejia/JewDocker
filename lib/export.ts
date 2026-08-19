@@ -8,34 +8,47 @@ const STATUS_LABEL: Record<string, string> = {
   consignment: "借售",
 };
 
+/** 缩略图请求宽度，需落在 next/image 的 imageSizes 白名单内 */
+const THUMB_REQUEST_WIDTH = 256;
+/** 写入单元格的图片最长边（px），够 90px 显示尺寸的 2 倍清晰度 */
+const THUMB_MAX_EDGE = 180;
+const THUMB_QUALITY = 0.7;
+
 /**
- * COS 域名没有配置 CORS，跨域直取会让 canvas 污染 / 图片加载失败，
- * 统一改走同源代理。
+ * 走 next/image 优化器：既避开 COS 跨域（同源，canvas 不会被污染），
+ * 又只下载缩略图而非原图，且优化结果在服务端缓存卷里复用。
  */
-function sameOriginUrl(url: string) {
+function thumbnailUrl(url: string) {
   return /^https?:\/\//i.test(url)
-    ? `/api/image-proxy?url=${encodeURIComponent(url)}`
+    ? `/_next/image?url=${encodeURIComponent(url)}&w=${THUMB_REQUEST_WIDTH}&q=60`
     : url;
 }
 
 /**
- * 将图片 URL 加载并转换为 PNG base64（去掉 data 前缀）。
- * 使用 canvas 归一化格式（兼容 jpeg/png/webp），失败时返回 null。
+ * 将图片 URL 加载、缩放并转换为 JPEG base64（去掉 data 前缀）。
+ * 用 canvas 归一化格式（兼容 jpeg/png/webp/avif），失败时返回 null。
  */
-function loadImageAsPngBase64(rawUrl: string): Promise<string | null> {
-  const url = sameOriginUrl(rawUrl);
+function loadImageAsJpegBase64(rawUrl: string): Promise<string | null> {
+  const url = thumbnailUrl(rawUrl);
   return new Promise((resolve) => {
     const img = new Image();
     img.crossOrigin = "anonymous";
     img.onload = () => {
       try {
+        const scale = Math.min(
+          1,
+          THUMB_MAX_EDGE / Math.max(img.naturalWidth, img.naturalHeight),
+        );
         const canvas = document.createElement("canvas");
-        canvas.width = img.naturalWidth;
-        canvas.height = img.naturalHeight;
+        canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+        canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
         const ctx = canvas.getContext("2d");
         if (!ctx) return resolve(null);
-        ctx.drawImage(img, 0, 0);
-        const dataUrl = canvas.toDataURL("image/png");
+        // JPEG 无透明通道，先铺白底避免透明区域变黑
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        const dataUrl = canvas.toDataURL("image/jpeg", THUMB_QUALITY);
         resolve(dataUrl.split(",")[1] ?? null);
       } catch {
         resolve(null);
@@ -106,7 +119,7 @@ export async function exportProductsToExcel(
   const images = await Promise.all(
     products.map((p) =>
       p.image_urls?.[0]
-        ? loadImageAsPngBase64(p.image_urls[0])
+        ? loadImageAsJpegBase64(p.image_urls[0])
         : Promise.resolve(null),
     ),
   );
@@ -143,7 +156,7 @@ export async function exportProductsToExcel(
     const base64 = images[i];
     if (base64) {
       row.height = 70;
-      const imageId = workbook.addImage({ base64, extension: "png" });
+      const imageId = workbook.addImage({ base64, extension: "jpeg" });
       ws.addImage(imageId, {
         tl: { col: 0, row: row.number - 1 },
         ext: { width: 90, height: 90 },
@@ -188,7 +201,7 @@ export async function exportLooseStonesToExcel(
   const images = await Promise.all(
     stones.map((s) =>
       s.image_urls?.[0]
-        ? loadImageAsPngBase64(s.image_urls[0])
+        ? loadImageAsJpegBase64(s.image_urls[0])
         : Promise.resolve(null),
     ),
   );
@@ -215,7 +228,7 @@ export async function exportLooseStonesToExcel(
     const base64 = images[i];
     if (base64) {
       row.height = 70;
-      const imageId = workbook.addImage({ base64, extension: "png" });
+      const imageId = workbook.addImage({ base64, extension: "jpeg" });
       ws.addImage(imageId, {
         tl: { col: 0, row: row.number - 1 },
         ext: { width: 90, height: 90 },
