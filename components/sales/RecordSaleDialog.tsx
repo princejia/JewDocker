@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { Plus } from "lucide-react";
 import { Product, Customer, LooseStone } from "@/types";
-import { formatProductCode } from "@/lib/utils";
+import { formatProductCode, cn } from "@/lib/utils";
 import { categoryLabel } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,6 +33,14 @@ const NO_CUSTOMER = "__none__";
 
 type ItemType = "product" | "loose_stone";
 type SaleType = "sold" | "consignment";
+
+type PickItem = {
+  id: string;
+  code: string;
+  name: string;
+  price: number;
+  product?: Product;
+};
 
 const PREVIEW_WIDTH = 288;
 const PREVIEW_HEIGHT = 180;
@@ -115,6 +123,7 @@ export function RecordSaleDialog() {
   const [itemType, setItemType] = useState<ItemType>("product");
   const [saleType, setSaleType] = useState<SaleType>("sold");
   const [itemId, setItemId] = useState("");
+  const [itemQuery, setItemQuery] = useState("");
   const [customerId, setCustomerId] = useState(NO_CUSTOMER);
   const [salePrice, setSalePrice] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("");
@@ -128,11 +137,24 @@ export function RecordSaleDialog() {
 
   useEffect(() => {
     if (!open) return;
-    fetch("/api/products?status=in_stock&limit=100", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((j) =>
-        setProducts((j.data ?? []).filter((p: Product) => !p.is_loaned))
-      );
+    // 接口单页上限 100，逐页拉全，保证搜索能覆盖所有在库产品
+    (async () => {
+      const all: Product[] = [];
+      let current = 1;
+      let pages = 1;
+      do {
+        const res = await fetch(
+          `/api/products?status=in_stock&limit=100&page=${current}`,
+          { cache: "no-store" }
+        );
+        if (!res.ok) break;
+        const json = await res.json();
+        all.push(...(json.data ?? []));
+        pages = json.totalPages ?? 1;
+        current += 1;
+      } while (current <= pages);
+      setProducts(all.filter((p) => !p.is_loaned));
+    })();
     fetch("/api/loose-stones", { cache: "no-store" })
       .then((r) => r.json())
       .then((j) =>
@@ -150,6 +172,8 @@ export function RecordSaleDialog() {
   function handleItemTypeChange(type: ItemType) {
     setItemType(type);
     setItemId("");
+    setItemQuery("");
+    setPreview(null);
     setSalePrice("");
   }
 
@@ -165,10 +189,36 @@ export function RecordSaleDialog() {
     }
   }
 
-  function reset() {
-    setItemType("product");
+  const pickList: PickItem[] =
+    itemType === "product"
+      ? products.map((p) => ({
+          id: p.id,
+          code: p.code ?? formatProductCode("P", p.created_at),
+          name: p.name,
+          price: Number(p.price),
+          product: p,
+        }))
+      : stones.map((s) => ({
+          id: s.id,
+          code: s.code ?? formatProductCode("L", s.created_at),
+          name: s.material || "裸石",
+          price: Number(s.price),
+        }));
+
+  const query = itemQuery.trim().toLowerCase();
+  const filteredItems = query
+    ? pickList.filter(
+        (it) =>
+          it.code.toLowerCase().includes(query) ||
+          it.name.toLowerCase().includes(query)
+      )
+    : pickList;
+
+  function reset() {    setItemType("product");
     setSaleType("sold");
     setItemId("");
+    setItemQuery("");
+    setPreview(null);
     setCustomerId(NO_CUSTOMER);
     setSalePrice("");
     setPaymentMethod("");
@@ -259,62 +309,57 @@ export function RecordSaleDialog() {
 
           <div className="space-y-2">
             <Label>{itemType === "product" ? "产品 *" : "裸石 *"}</Label>
-            <Select
-              value={itemId}
-              onValueChange={handleItemChange}
-              onOpenChange={(o) => !o && setPreview(null)}
-            >
-              <SelectTrigger>
-                <SelectValue
-                  placeholder={
-                    itemType === "product" ? "选择在库产品" : "选择在库裸石"
-                  }
-                />
-              </SelectTrigger>
-              <SelectContent>
-                {itemType === "product" ? (
-                  products.length === 0 ? (
-                    <SelectItem value="__empty__" disabled>
-                      无在库产品
-                    </SelectItem>
-                  ) : (
-                    products.map((p) => (
-                      <SelectItem
-                        key={p.id}
-                        value={p.id}
-                        onMouseEnter={(e) =>
-                          setPreview({
-                            product: p,
-                            x: e.clientX,
-                            y: e.clientY,
-                          })
-                        }
-                        onMouseLeave={() => setPreview(null)}
-                      >
-                        <span className="font-mono text-gray-500">
-                          {p.code ?? formatProductCode("P", p.created_at)}
-                        </span>{" "}
-                        {p.name}（¥{Number(p.price).toLocaleString()}）
-                      </SelectItem>
-                    ))
-                  )
-                ) : stones.length === 0 ? (
-                  <SelectItem value="__empty__" disabled>
-                    无可售裸石
-                  </SelectItem>
-                ) : (
-                  stones.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>
-                      <span className="font-mono text-gray-500">
-                        {s.code ?? formatProductCode("L", s.created_at)}
-                      </span>{" "}
-                      {(s.material || "裸石") +
-                        `（¥${Number(s.price).toLocaleString()}）`}
-                    </SelectItem>
-                  ))
-                )}
-              </SelectContent>
-            </Select>
+            <Input
+              value={itemQuery}
+              onChange={(e) => setItemQuery(e.target.value)}
+              placeholder={
+                itemType === "product"
+                  ? "搜索在库产品：编号或名称"
+                  : "搜索在库裸石：编号或材质"
+              }
+            />
+            <div className="max-h-48 overflow-y-auto rounded-md border">
+              {filteredItems.length === 0 ? (
+                <p className="px-3 py-4 text-center text-sm text-gray-400">
+                  {pickList.length === 0
+                    ? itemType === "product"
+                      ? "无在库产品"
+                      : "无可售裸石"
+                    : "无匹配项"}
+                </p>
+              ) : (
+                filteredItems.map((it) => (
+                  <button
+                    key={it.id}
+                    type="button"
+                    onClick={() => handleItemChange(it.id)}
+                    onMouseEnter={
+                      it.product
+                        ? (e) =>
+                            setPreview({
+                              product: it.product as Product,
+                              x: e.clientX,
+                              y: e.clientY,
+                            })
+                        : undefined
+                    }
+                    onMouseLeave={() => setPreview(null)}
+                    className={cn(
+                      "flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-amber-50",
+                      itemId === it.id && "bg-amber-100"
+                    )}
+                  >
+                    <span className="shrink-0 font-mono text-xs text-gray-500">
+                      {it.code}
+                    </span>
+                    <span className="truncate">{it.name}</span>
+                    <span className="ml-auto shrink-0 text-xs text-gray-500">
+                      ¥{it.price.toLocaleString()}
+                    </span>
+                  </button>
+                ))
+              )}
+            </div>
           </div>
 
           <div className="space-y-2">
