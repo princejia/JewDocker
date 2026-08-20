@@ -131,21 +131,21 @@ function wrapText(
 const num = (v: number) =>
   Number.isInteger(v) ? String(v) : String(Number(v.toFixed(3)));
 
-/** 右半面字段行，值为空或 0 的字段整行省略。 */
+/** 右半面字段行，只打印值本身；值为空或 0 的字段整行省略。 */
 function fieldLines(item: LabelItem): string[] {
   const lines: string[] = [];
-  const push = (label: string, value: string | null | undefined) => {
-    if (value) lines.push(`${label} ${value}`);
+  const push = (value: string | null | undefined) => {
+    if (value) lines.push(value);
   };
 
-  push("尺寸", item.size);
-  push("产地", item.origin);
+  push(item.size);
+  push(item.origin);
   if (item.weight) {
-    push("重量", `${num(Number(item.weight))}${item.weightUnit || ""}`);
+    push(`${num(Number(item.weight))}${item.weightUnit || ""}`);
   }
-  push("配石", item.inlaidStones);
-  if (item.laborPrice) push("工费", `${num(Number(item.laborPrice))}/g`);
-  if (item.surcharge) push("附加费", num(Number(item.surcharge)));
+  push(item.inlaidStones);
+  if (item.laborPrice) push(num(Number(item.laborPrice)));
+  if (item.surcharge) push(num(Number(item.surcharge)));
 
   return lines;
 }
