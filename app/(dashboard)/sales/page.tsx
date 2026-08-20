@@ -25,7 +25,8 @@ export default async function SalesPage() {
     .select(
       "*, products(id, name, image_urls, sale_status), customers(id, name), loose_stones(id, material, image_urls, sale_status)"
     )
-    .order("sold_at", { ascending: false });
+    .order("sold_at", { ascending: false })
+    .order("created_at", { ascending: false });
 
   const sales = (data ?? []) as ProductSaleWithRelations[];
 

@@ -1,4 +1,4 @@
-import { GemstoneCategory, ProductFunction } from "@/types";
+import { GemstoneCategory, Product, ProductFunction } from "@/types";
 
 /** 宝石分类默认建议项（自由文本输入，可被历史数据补充） */
 export const GEMSTONE_CATEGORY_SUGGESTIONS: string[] = ["翡翠", "蓝宝", "黄金"];
@@ -6,6 +6,32 @@ export const GEMSTONE_CATEGORY_SUGGESTIONS: string[] = ["翡翠", "蓝宝", "黄
 /** 是否为黄金分类（黄金有专属的工费 / 附加费计价字段） */
 export function isGoldCategory(value?: string | null): boolean {
   return categoryLabel(value) === "黄金";
+}
+
+/**
+ * 进货成本：黄金按「进货总成本」展开计算，其他分类直接用进货价。
+ * 黄金 = 进货价(g/元)×重量 + 工费成本(g/元)×重量 + 附加费×买入折扣
+ */
+export function purchaseCostOf(
+  p: Pick<
+    Product,
+    | "gemstone_category"
+    | "total_weight"
+    | "purchase_price"
+    | "labor_cost"
+    | "surcharge"
+    | "purchase_discount"
+  >
+): number {
+  const purchasePrice = Number(p.purchase_price || 0);
+  if (!isGoldCategory(p.gemstone_category)) return purchasePrice;
+
+  const weight = Number(p.total_weight || 0);
+  return (
+    weight * purchasePrice +
+    weight * Number(p.labor_cost || 0) +
+    Number(p.surcharge || 0) * Number(p.purchase_discount || 0)
+  );
 }
 
 /** 功能分类默认建议项（自由文本输入，可被历史数据补充） */

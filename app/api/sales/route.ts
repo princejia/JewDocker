@@ -15,7 +15,8 @@ export async function GET(req: NextRequest) {
     .select(
       "*, products(id, name, image_urls), customers(id, name), loose_stones(id, material, image_urls)"
     )
-    .order("sold_at", { ascending: false });
+    .order("sold_at", { ascending: false })
+    .order("created_at", { ascending: false });
 
   if (from) query = query.gte("sold_at", from);
   if (to) query = query.lte("sold_at", to);

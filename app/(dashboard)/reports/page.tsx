@@ -12,7 +12,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import { Boxes, Coins, PiggyBank, Timer } from "lucide-react";
+import { purchaseCostOf } from "@/lib/constants";
+import { Coins, HelpCircle, Timer } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -21,14 +22,9 @@ export default async function ReportsPage() {
   const { data } = await supabase.from("products").select("*");
   const list: Product[] = data ?? [];
 
-  // 库存价值
+  // 库存成本
   const inStock = list.filter((p) => p.sale_status === "in_stock");
-  const inventoryValue = inStock.reduce((s, p) => s + Number(p.price || 0), 0);
-  const inventoryCost = inStock.reduce(
-    (s, p) => s + Number(p.purchase_price || 0),
-    0
-  );
-  const expectedProfit = inventoryValue - inventoryCost;
+  const inventoryCost = inStock.reduce((s, p) => s + purchaseCostOf(p), 0);
 
   // 近 30 天销售趋势
   const days: ProfitDatum[] = [];
@@ -39,7 +35,7 @@ export default async function ReportsPage() {
       date: d.slice(5),
       revenue: sold.reduce((s, p) => s + Number(p.sale_price || 0), 0),
       profit: sold.reduce(
-        (s, p) => s + (Number(p.sale_price || 0) - Number(p.purchase_price || 0)),
+        (s, p) => s + (Number(p.sale_price || 0) - purchaseCostOf(p)),
         0
       ),
     });
@@ -102,26 +98,37 @@ export default async function ReportsPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-gray-900">财务报表</h1>
+      <div className="flex items-center gap-2">
+        <h1 className="text-2xl font-bold text-gray-900">财务报表</h1>
+        <span className="group relative inline-flex">
+          <button
+            type="button"
+            aria-label="计算方式说明"
+            className="rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+          >
+            <HelpCircle className="h-4 w-4" />
+          </button>
+          <span className="pointer-events-none absolute left-0 top-full z-20 mt-1 w-[min(22rem,calc(100vw-2rem))] rounded-lg bg-gray-900 p-3 text-xs leading-relaxed text-white opacity-0 shadow-lg transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">
+            <span className="block font-semibold">在库总成本</span>
+            <span className="block">· 黄金：进货总成本</span>
+            <span className="block">· 其他：进货价</span>
+            <span className="mt-2 block font-semibold">利润</span>
+            <span className="block">· 黄金：出售价 − 进货总成本</span>
+            <span className="block">· 其他：出售价 − 进货价</span>
+            <span className="mt-2 block text-gray-300">
+              进货总成本 = 进货价(g/元)×重量 + 工费成本(g/元)×重量 +
+              附加费×买入折扣
+            </span>
+          </span>
+        </span>
+      </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <StatsCard
-          title="在库总价值"
-          value={formatCurrency(inventoryValue)}
-          icon={Boxes}
-          accent="amber"
-        />
         <StatsCard
           title="在库总成本"
           value={formatCurrency(inventoryCost)}
           icon={Coins}
           accent="gray"
-        />
-        <StatsCard
-          title="预计利润空间"
-          value={formatCurrency(expectedProfit)}
-          icon={PiggyBank}
-          accent="green"
         />
       </div>
 
