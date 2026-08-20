@@ -1,10 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { Plus } from "lucide-react";
 import { Product, Customer, LooseStone } from "@/types";
 import { formatProductCode } from "@/lib/utils";
+import { categoryLabel } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -31,6 +34,73 @@ const NO_CUSTOMER = "__none__";
 type ItemType = "product" | "loose_stone";
 type SaleType = "sold" | "consignment";
 
+const PREVIEW_WIDTH = 256;
+const PREVIEW_HEIGHT = 320;
+
+/** 产品下拉项的悬停预览：跟随鼠标定位，避开下拉框的 overflow-hidden 裁切 */
+function ProductPreview({
+  product,
+  x,
+  y,
+}: {
+  product: Product;
+  x: number;
+  y: number;
+}) {
+  const rows: [string, string | null][] = [
+    [
+      "重量",
+      product.total_weight != null
+        ? `${product.total_weight} ${product.weight_unit || "克(g)"}`
+        : null,
+    ],
+    ["尺寸", product.size],
+    ["镶嵌配石", product.inlaid_stones],
+    ["宝石分类", categoryLabel(product.gemstone_category) || null],
+    ["功能分类", categoryLabel(product.function_category) || null],
+  ];
+
+  return createPortal(
+    <div
+      className="pointer-events-none fixed z-[100] hidden w-64 rounded-lg border border-gray-200 bg-white p-3 shadow-xl md:block"
+      style={{
+        left: Math.min(x + 16, window.innerWidth - PREVIEW_WIDTH - 8),
+        top: Math.min(y, window.innerHeight - PREVIEW_HEIGHT - 8),
+      }}
+    >
+      <div className="relative mb-2 aspect-square overflow-hidden rounded-md bg-gray-50">
+        {product.image_urls?.[0] ? (
+          <Image
+            src={product.image_urls[0]}
+            alt={product.name}
+            fill
+            className="object-cover"
+            sizes="256px"
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center text-3xl text-gray-300">
+            💎
+          </div>
+        )}
+      </div>
+      <p className="mb-1 truncate text-sm font-semibold text-gray-900">
+        {product.name}
+      </p>
+      <dl className="space-y-0.5 text-xs text-gray-600">
+        {rows
+          .filter(([, v]) => v)
+          .map(([label, value]) => (
+            <div key={label} className="flex gap-2">
+              <dt className="shrink-0 text-gray-400">{label}</dt>
+              <dd className="truncate">{value}</dd>
+            </div>
+          ))}
+      </dl>
+    </div>,
+    document.body
+  );
+}
+
 export function RecordSaleDialog() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -48,6 +118,11 @@ export function RecordSaleDialog() {
   const [paymentMethod, setPaymentMethod] = useState("");
   const [soldAt, setSoldAt] = useState(new Date().toISOString().slice(0, 10));
   const [notes, setNotes] = useState("");
+  const [preview, setPreview] = useState<{
+    product: Product;
+    x: number;
+    y: number;
+  } | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -78,6 +153,7 @@ export function RecordSaleDialog() {
 
   function handleItemChange(id: string) {
     setItemId(id);
+    setPreview(null);
     if (itemType === "product") {
       const p = products.find((x) => x.id === id);
       if (p && !salePrice) setSalePrice(String(p.price));
@@ -181,7 +257,11 @@ export function RecordSaleDialog() {
 
           <div className="space-y-2">
             <Label>{itemType === "product" ? "产品 *" : "裸石 *"}</Label>
-            <Select value={itemId} onValueChange={handleItemChange}>
+            <Select
+              value={itemId}
+              onValueChange={handleItemChange}
+              onOpenChange={(o) => !o && setPreview(null)}
+            >
               <SelectTrigger>
                 <SelectValue
                   placeholder={
@@ -197,7 +277,18 @@ export function RecordSaleDialog() {
                     </SelectItem>
                   ) : (
                     products.map((p) => (
-                      <SelectItem key={p.id} value={p.id}>
+                      <SelectItem
+                        key={p.id}
+                        value={p.id}
+                        onMouseEnter={(e) =>
+                          setPreview({
+                            product: p,
+                            x: e.clientX,
+                            y: e.clientY,
+                          })
+                        }
+                        onMouseLeave={() => setPreview(null)}
+                      >
                         <span className="font-mono text-gray-500">
                           {p.code ?? formatProductCode("P", p.created_at)}
                         </span>{" "}
@@ -300,6 +391,13 @@ export function RecordSaleDialog() {
           </Button>
         </DialogFooter>
       </DialogContent>
+      {preview && (
+        <ProductPreview
+          product={preview.product}
+          x={preview.x}
+          y={preview.y}
+        />
+      )}
     </Dialog>
   );
 }
