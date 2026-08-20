@@ -248,15 +248,54 @@ CREATE TRIGGER loose_stones_updated_at
 -- ------------------------------------------------------------
 -- 自动生成编号触发器（前缀 + 北京时间年月日时分秒）
 -- 产品以 P 开头，裸石以 L 开头
+-- 用发号表保证唯一：同一秒内（含单条语句批量插入）自动顺延到下一秒
 -- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS record_code_seq (
+  prefix    VARCHAR(4) PRIMARY KEY,
+  last_code VARCHAR(20) NOT NULL
+);
+
+-- 用已有数据的最大编号初始化，避免新编号与历史编号相撞
+INSERT INTO record_code_seq (prefix, last_code)
+SELECT 'P', max(code) FROM products WHERE code ~ '^P[0-9]{14}$'
+HAVING max(code) IS NOT NULL
+ON CONFLICT (prefix) DO NOTHING;
+
+INSERT INTO record_code_seq (prefix, last_code)
+SELECT 'L', max(code) FROM loose_stones WHERE code ~ '^L[0-9]{14}$'
+HAVING max(code) IS NOT NULL
+ON CONFLICT (prefix) DO NOTHING;
+
+CREATE OR REPLACE FUNCTION next_record_code(p_prefix TEXT, p_at TIMESTAMPTZ)
+RETURNS TEXT AS $$
+DECLARE
+  v_code TEXT;
+BEGIN
+  -- ON CONFLICT DO UPDATE 会锁住发号行，并发插入在此串行化
+  INSERT INTO record_code_seq AS s (prefix, last_code)
+  VALUES (
+    p_prefix,
+    p_prefix || to_char(COALESCE(p_at, NOW()) AT TIME ZONE 'Asia/Shanghai', 'YYYYMMDDHH24MISS')
+  )
+  ON CONFLICT (prefix) DO UPDATE
+    SET last_code = s.prefix || to_char(
+      GREATEST(
+        to_timestamp(substring(EXCLUDED.last_code FROM 2), 'YYYYMMDDHH24MISS'),
+        to_timestamp(substring(s.last_code FROM 2), 'YYYYMMDDHH24MISS') + INTERVAL '1 second'
+      ),
+      'YYYYMMDDHH24MISS'
+    )
+  RETURNING s.last_code INTO v_code;
+
+  RETURN v_code;
+END;
+$$ LANGUAGE plpgsql;
+
 CREATE OR REPLACE FUNCTION set_record_code()
 RETURNS TRIGGER AS $$
 BEGIN
   IF NEW.code IS NULL OR NEW.code = '' THEN
-    NEW.code := TG_ARGV[0] || to_char(
-      COALESCE(NEW.created_at, NOW()) AT TIME ZONE 'Asia/Shanghai',
-      'YYYYMMDDHH24MISS'
-    );
+    NEW.code := next_record_code(TG_ARGV[0], NEW.created_at);
   END IF;
   RETURN NEW;
 END;
@@ -273,8 +312,8 @@ CREATE TRIGGER loose_stones_set_code
   FOR EACH ROW EXECUTE FUNCTION set_record_code('L');
 
 -- 回填已有数据的编号（幂等）
-UPDATE products     SET code = 'P' || to_char(created_at AT TIME ZONE 'Asia/Shanghai', 'YYYYMMDDHH24MISS') WHERE code IS NULL OR code = '';
-UPDATE loose_stones SET code = 'L' || to_char(created_at AT TIME ZONE 'Asia/Shanghai', 'YYYYMMDDHH24MISS') WHERE code IS NULL OR code = '';
+UPDATE products     SET code = next_record_code('P', created_at) WHERE code IS NULL OR code = '';
+UPDATE loose_stones SET code = next_record_code('L', created_at) WHERE code IS NULL OR code = '';
 
 -- ------------------------------------------------------------
 -- 常用索引
@@ -284,8 +323,12 @@ CREATE INDEX IF NOT EXISTS idx_products_purchased_at ON products(purchased_at);
 CREATE INDEX IF NOT EXISTS idx_products_created_at ON products(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_products_name ON products USING gin(to_tsvector('simple', name));
 CREATE INDEX IF NOT EXISTS idx_products_source_loose_stone ON products(source_loose_stone_id);
-CREATE INDEX IF NOT EXISTS idx_products_code ON products(code);
-CREATE INDEX IF NOT EXISTS idx_loose_stones_code ON loose_stones(code);
+
+-- 编号唯一（旧的非唯一索引已被替换）
+DROP INDEX IF EXISTS idx_products_code;
+DROP INDEX IF EXISTS idx_loose_stones_code;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_products_code ON products(code);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_loose_stones_code ON loose_stones(code);
 
 -- ============================================================
 -- 行级安全策略 (RLS)
@@ -296,6 +339,7 @@ ALTER TABLE product_sales ENABLE ROW LEVEL SECURITY;
 ALTER TABLE loose_stones ENABLE ROW LEVEL SECURITY;
 ALTER TABLE product_returns ENABLE ROW LEVEL SECURITY;
 ALTER TABLE item_loans ENABLE ROW LEVEL SECURITY;
+ALTER TABLE record_code_seq ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Authenticated users can read products" ON products;
 CREATE POLICY "Authenticated users can read products"

@@ -61,7 +61,7 @@
 | 字段名（英文） | 字段名（中文） | 数据类型 | 说明 |
 |---------------|---------------|----------|------|
 | id | 主键 | UUID | 自动生成，唯一标识每件产品 |
-| code | 产品编号 | VARCHAR(20) | 入库时自动生成并存储，规则 `P + 北京时间年月日时分秒`（如 `P20260624153012`），便于查询 |
+| code | 产品编号 | VARCHAR(20) | 入库时自动生成并存储，规则 `P + 北京时间年月日时分秒`（如 `P20260624153012`），全表唯一，便于查询 |
 | image_urls | 产品图片 | TEXT[] | 图片 URL 数组，存储在腾讯云 COS |
 | name | 产品名称 | VARCHAR(255) | 产品完整名称，如：18K金钻石戒指 |
 | total_weight | 重量 | DECIMAL(10,3) | 产品重量，精度至小数点后3位，单位由 weight_unit 决定 |
@@ -88,7 +88,7 @@
 | updated_at | 更新时间 | TIMESTAMPTZ | 最后更新时间，自动维护 |
 | notes | 备注 | TEXT | 额外备注信息，可选填 |
 
-> **产品编号**：`code` 字段在入库时由数据库触发器自动生成并持久化，规则为 `P + 北京时间年月日时分秒`（如 `P20260624153012`），可直接用于搜索与查询。
+> **产品编号**：`code` 字段在入库时由数据库触发器自动生成并持久化，规则为 `P + 北京时间年月日时分秒`（如 `P20260624153012`），可直接用于搜索与查询。编号由发号表 `record_code_seq` 统一分配，同一秒内（含单条语句批量插入）自动顺延到下一秒，并有唯一索引兜底，不会重复。
 
 ### 2.2 辅助表：customers（客户表）
 
@@ -123,7 +123,7 @@
 | 字段名 | 中文名 | 类型 | 说明 |
 |--------|--------|------|------|
 | id | 主键 | UUID | 唯一标识 |
-| code | 裸石编号 | VARCHAR(20) | 入库时自动生成并存储，规则 `L + 北京时间年月日时分秒`（如 `L20260624153012`） |
+| code | 裸石编号 | VARCHAR(20) | 入库时自动生成并存储，规则 `L + 北京时间年月日时分秒`（如 `L20260624153012`），全表唯一 |
 | image_urls | 裸石图片 | TEXT[] | 图片 URL 数组，存储在腾讯云 COS |
 | material | 产品名称 | VARCHAR(100) | 裸石产品名称，如：天然翡翠、矢车菊蓝宝 |
 | size | 尺寸 | VARCHAR(100) | 裸石尺寸，如：10×8mm |
@@ -310,15 +310,41 @@ CREATE TRIGGER products_updated_at
   BEFORE UPDATE ON products
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
--- 编号自动生成（前缀 + 北京时间年月日时分秒）
+-- 编号自动生成（前缀 + 北京时间年月日时分秒），发号表保证唯一
+CREATE TABLE record_code_seq (
+  prefix    VARCHAR(4) PRIMARY KEY,
+  last_code VARCHAR(20) NOT NULL
+);
+
+CREATE OR REPLACE FUNCTION next_record_code(p_prefix TEXT, p_at TIMESTAMPTZ)
+RETURNS TEXT AS $$
+DECLARE
+  v_code TEXT;
+BEGIN
+  INSERT INTO record_code_seq AS s (prefix, last_code)
+  VALUES (
+    p_prefix,
+    p_prefix || to_char(COALESCE(p_at, NOW()) AT TIME ZONE 'Asia/Shanghai', 'YYYYMMDDHH24MISS')
+  )
+  ON CONFLICT (prefix) DO UPDATE
+    SET last_code = s.prefix || to_char(
+      GREATEST(
+        to_timestamp(substring(EXCLUDED.last_code FROM 2), 'YYYYMMDDHH24MISS'),
+        to_timestamp(substring(s.last_code FROM 2), 'YYYYMMDDHH24MISS') + INTERVAL '1 second'
+      ),
+      'YYYYMMDDHH24MISS'
+    )
+  RETURNING s.last_code INTO v_code;
+
+  RETURN v_code;
+END;
+$$ LANGUAGE plpgsql;
+
 CREATE OR REPLACE FUNCTION set_record_code()
 RETURNS TRIGGER AS $$
 BEGIN
   IF NEW.code IS NULL OR NEW.code = '' THEN
-    NEW.code := TG_ARGV[0] || to_char(
-      COALESCE(NEW.created_at, NOW()) AT TIME ZONE 'Asia/Shanghai',
-      'YYYYMMDDHH24MISS'
-    );
+    NEW.code := next_record_code(TG_ARGV[0], NEW.created_at);
   END IF;
   RETURN NEW;
 END;
@@ -337,8 +363,8 @@ CREATE INDEX idx_products_sale_status ON products(sale_status);
 CREATE INDEX idx_products_purchased_at ON products(purchased_at);
 CREATE INDEX idx_products_created_at ON products(created_at DESC);
 CREATE INDEX idx_products_name ON products USING gin(to_tsvector('simple', name));
-CREATE INDEX idx_products_code ON products(code);
-CREATE INDEX idx_loose_stones_code ON loose_stones(code);
+CREATE UNIQUE INDEX uq_products_code ON products(code);
+CREATE UNIQUE INDEX uq_loose_stones_code ON loose_stones(code);
 CREATE INDEX idx_returns_sale ON product_returns(sale_id);
 CREATE INDEX idx_returns_product ON product_returns(product_id);
 CREATE INDEX idx_returns_returned_at ON product_returns(returned_at);
