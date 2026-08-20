@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { Plus } from "lucide-react";
+import { ChevronDown, Plus } from "lucide-react";
 import { Product, Customer, LooseStone } from "@/types";
 import { formatProductCode, cn } from "@/lib/utils";
 import { categoryLabel } from "@/lib/constants";
@@ -124,6 +124,8 @@ export function RecordSaleDialog() {
   const [saleType, setSaleType] = useState<SaleType>("sold");
   const [itemId, setItemId] = useState("");
   const [itemQuery, setItemQuery] = useState("");
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const pickerRef = useRef<HTMLDivElement>(null);
   const [customerId, setCustomerId] = useState(NO_CUSTOMER);
   const [salePrice, setSalePrice] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("");
@@ -169,10 +171,20 @@ export function RecordSaleDialog() {
       .then((j) => setCustomers(j.data ?? []));
   }, [open]);
 
+  useEffect(() => {
+    if (!pickerOpen) return;
+    function onPointerDown(e: MouseEvent) {
+      if (!pickerRef.current?.contains(e.target as Node)) setPickerOpen(false);
+    }
+    document.addEventListener("mousedown", onPointerDown);
+    return () => document.removeEventListener("mousedown", onPointerDown);
+  }, [pickerOpen]);
+
   function handleItemTypeChange(type: ItemType) {
     setItemType(type);
     setItemId("");
     setItemQuery("");
+    setPickerOpen(false);
     setPreview(null);
     setSalePrice("");
   }
@@ -180,6 +192,7 @@ export function RecordSaleDialog() {
   function handleItemChange(id: string) {
     setItemId(id);
     setPreview(null);
+    setPickerOpen(false);
     if (itemType === "product") {
       const p = products.find((x) => x.id === id);
       if (p && !salePrice) setSalePrice(String(p.price));
@@ -214,10 +227,14 @@ export function RecordSaleDialog() {
       )
     : pickList;
 
-  function reset() {    setItemType("product");
+  const selectedItem = pickList.find((it) => it.id === itemId) ?? null;
+
+  function reset() {
+    setItemType("product");
     setSaleType("sold");
     setItemId("");
     setItemQuery("");
+    setPickerOpen(false);
     setPreview(null);
     setCustomerId(NO_CUSTOMER);
     setSalePrice("");
@@ -307,57 +324,95 @@ export function RecordSaleDialog() {
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label>{itemType === "product" ? "产品 *" : "裸石 *"}</Label>
-            <Input
-              value={itemQuery}
-              onChange={(e) => setItemQuery(e.target.value)}
-              placeholder={
-                itemType === "product"
-                  ? "搜索在库产品：编号或名称"
-                  : "搜索在库裸石：编号或材质"
+          <div
+            className="space-y-2"
+            ref={pickerRef}
+            onKeyDown={(e) => {
+              if (e.key === "Escape" && pickerOpen) {
+                e.stopPropagation();
+                setPickerOpen(false);
               }
-            />
-            <div className="max-h-48 overflow-y-auto rounded-md border">
-              {filteredItems.length === 0 ? (
-                <p className="px-3 py-4 text-center text-sm text-gray-400">
-                  {pickList.length === 0
-                    ? itemType === "product"
-                      ? "无在库产品"
-                      : "无可售裸石"
-                    : "无匹配项"}
-                </p>
-              ) : (
-                filteredItems.map((it) => (
-                  <button
-                    key={it.id}
-                    type="button"
-                    onClick={() => handleItemChange(it.id)}
-                    onMouseEnter={
-                      it.product
-                        ? (e) =>
-                            setPreview({
-                              product: it.product as Product,
-                              x: e.clientX,
-                              y: e.clientY,
-                            })
-                        : undefined
-                    }
-                    onMouseLeave={() => setPreview(null)}
-                    className={cn(
-                      "flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-amber-50",
-                      itemId === it.id && "bg-amber-100"
-                    )}
-                  >
+            }}
+          >
+            <Label>{itemType === "product" ? "产品 *" : "裸石 *"}</Label>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setPickerOpen((o) => !o)}
+                className="flex h-10 w-full items-center justify-between gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm"
+              >
+                {selectedItem ? (
+                  <span className="flex min-w-0 items-center gap-2">
                     <span className="shrink-0 font-mono text-xs text-gray-500">
-                      {it.code}
+                      {selectedItem.code}
                     </span>
-                    <span className="truncate">{it.name}</span>
-                    <span className="ml-auto shrink-0 text-xs text-gray-500">
-                      ¥{it.price.toLocaleString()}
-                    </span>
-                  </button>
-                ))
+                    <span className="truncate">{selectedItem.name}</span>
+                  </span>
+                ) : (
+                  <span className="text-gray-400">
+                    {itemType === "product" ? "选择在库产品" : "选择在库裸石"}
+                  </span>
+                )}
+                <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
+              </button>
+
+              {pickerOpen && (
+                <div className="absolute left-0 right-0 top-11 z-50 rounded-md border bg-white shadow-lg">
+                  <div className="border-b p-2">
+                    <Input
+                      autoFocus
+                      value={itemQuery}
+                      onChange={(e) => setItemQuery(e.target.value)}
+                      placeholder={
+                        itemType === "product"
+                          ? "搜索编号或名称"
+                          : "搜索编号或材质"
+                      }
+                    />
+                  </div>
+                  <div className="max-h-56 overflow-y-auto">
+                    {filteredItems.length === 0 ? (
+                      <p className="px-3 py-4 text-center text-sm text-gray-400">
+                        {pickList.length === 0
+                          ? itemType === "product"
+                            ? "无在库产品"
+                            : "无可售裸石"
+                          : "无匹配项"}
+                      </p>
+                    ) : (
+                      filteredItems.map((it) => (
+                        <button
+                          key={it.id}
+                          type="button"
+                          onClick={() => handleItemChange(it.id)}
+                          onMouseEnter={
+                            it.product
+                              ? (e) =>
+                                  setPreview({
+                                    product: it.product as Product,
+                                    x: e.clientX,
+                                    y: e.clientY,
+                                  })
+                              : undefined
+                          }
+                          onMouseLeave={() => setPreview(null)}
+                          className={cn(
+                            "flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-amber-50",
+                            itemId === it.id && "bg-amber-100"
+                          )}
+                        >
+                          <span className="shrink-0 font-mono text-xs text-gray-500">
+                            {it.code}
+                          </span>
+                          <span className="truncate">{it.name}</span>
+                          <span className="ml-auto shrink-0 text-xs text-gray-500">
+                            ¥{it.price.toLocaleString()}
+                          </span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </div>
               )}
             </div>
           </div>
