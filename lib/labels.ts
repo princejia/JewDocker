@@ -132,10 +132,10 @@ const num = (v: number) =>
   Number.isInteger(v) ? String(v) : String(Number(v.toFixed(3)));
 
 /** 右半面字段行，只打印值本身；值为空或 0 的字段整行省略。 */
-function fieldLines(item: LabelItem): string[] {
-  const lines: string[] = [];
-  const push = (value: string | null | undefined) => {
-    if (value) lines.push(value);
+function fieldValues(item: LabelItem): { text: string; wrap?: boolean }[] {
+  const fields: { text: string; wrap?: boolean }[] = [];
+  const push = (value: string | null | undefined, wrap?: boolean) => {
+    if (value) fields.push({ text: value, wrap });
   };
 
   push(item.size);
@@ -143,11 +143,11 @@ function fieldLines(item: LabelItem): string[] {
   if (item.weight) {
     push(`${num(Number(item.weight))}${item.weightUnit || ""}`);
   }
-  push(item.inlaidStones);
+  push(item.inlaidStones, true);
   if (item.laborPrice) push(num(Number(item.laborPrice)));
   if (item.surcharge) push(num(Number(item.surcharge)));
 
-  return lines;
+  return fields;
 }
 
 /**
@@ -203,10 +203,15 @@ async function renderLabelImage(
 
   y += 0.4;
   ctx.font = "400 14px 'Microsoft YaHei', sans-serif";
-  for (const line of fieldLines(item)) {
-    if (y + FIELD_LINE_H > LABEL_H - 0.5) break;
-    ctx.fillText(truncate(ctx, line, textW), textX, y * PX_PER_MM);
-    y += FIELD_LINE_H;
+  for (const field of fieldValues(item)) {
+    const lines = field.wrap
+      ? wrapText(ctx, field.text, textW, 3)
+      : [truncate(ctx, field.text, textW)];
+    for (const line of lines) {
+      if (y + FIELD_LINE_H > LABEL_H - 0.5) return canvas.toDataURL("image/png");
+      ctx.fillText(line, textX, y * PX_PER_MM);
+      y += FIELD_LINE_H;
+    }
   }
 
   return canvas.toDataURL("image/png");
