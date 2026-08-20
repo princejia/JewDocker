@@ -1,7 +1,9 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { categoryLabel } from "@/lib/constants";
 import {
   Select,
   SelectContent,
@@ -14,6 +16,7 @@ export interface ProductFilterState {
   search: string;
   status: string;
   is_loose_stone: string;
+  gemstone_category: string;
   price_min: string;
   price_max: string;
   sort_by: string;
@@ -24,6 +27,7 @@ export const DEFAULT_FILTERS: ProductFilterState = {
   search: "",
   status: "all",
   is_loose_stone: "all",
+  gemstone_category: "all",
   price_min: "",
   price_max: "",
   sort_by: "created_at",
@@ -41,6 +45,15 @@ export function ProductFilters({
   onChange,
   onReset,
 }: ProductFiltersProps) {
+  const [categories, setCategories] = useState<string[]>([]);
+
+  useEffect(() => {
+    fetch("/api/options", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => setCategories(j.gemstone_category ?? []))
+      .catch(() => setCategories([]));
+  }, []);
+
   function update<K extends keyof ProductFilterState>(
     key: K,
     v: ProductFilterState[K]
@@ -79,6 +92,23 @@ export function ProductFilters({
           <SelectItem value="all">全部类型</SelectItem>
           <SelectItem value="true">裸石</SelectItem>
           <SelectItem value="false">镶嵌成品</SelectItem>
+        </SelectContent>
+      </Select>
+
+      <Select
+        value={value.gemstone_category}
+        onValueChange={(v) => update("gemstone_category", v)}
+      >
+        <SelectTrigger>
+          <SelectValue placeholder="宝石分类" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">全部宝石分类</SelectItem>
+          {categories.map((c) => (
+            <SelectItem key={c} value={c}>
+              {categoryLabel(c)}
+            </SelectItem>
+          ))}
         </SelectContent>
       </Select>
 

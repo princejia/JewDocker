@@ -10,6 +10,7 @@ export async function GET(req: NextRequest) {
   const search = searchParams.get("search");
   const is_loose_stone = searchParams.get("is_loose_stone");
   const origin = searchParams.get("origin");
+  const gemstone_category = searchParams.get("gemstone_category");
   const price_min = searchParams.get("price_min");
   const price_max = searchParams.get("price_max");
   const sort_by = searchParams.get("sort_by") || "created_at";
@@ -30,6 +31,8 @@ export async function GET(req: NextRequest) {
   if (is_loose_stone !== null)
     query = query.eq("is_loose_stone", is_loose_stone === "true");
   if (origin) query = query.eq("origin", origin);
+  if (gemstone_category)
+    query = query.eq("gemstone_category", gemstone_category);
   if (price_min) query = query.gte("price", Number(price_min));
   if (price_max) query = query.lte("price", Number(price_max));
 

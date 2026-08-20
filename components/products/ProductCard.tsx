@@ -4,12 +4,38 @@ import { Product } from "@/types";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { formatCurrency, formatDate, formatProductCode } from "@/lib/utils";
 
-export function ProductCard({ product }: { product: Product }) {
+export function ProductCard({
+  product,
+  selected,
+  onToggleSelect,
+}: {
+  product: Product;
+  selected?: boolean;
+  onToggleSelect?: (product: Product) => void;
+}) {
   return (
     <Link href={`/products/${product.id}`}>
       <div className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm transition-shadow hover:shadow-md">
         {/* 产品图片 */}
         <div className="relative aspect-square bg-gray-50">
+          {onToggleSelect && (
+            <label
+              className="absolute left-2 top-2 z-10 flex h-6 w-6 items-center justify-center rounded-md bg-white/90 shadow-sm"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onToggleSelect(product);
+              }}
+            >
+              <input
+                type="checkbox"
+                readOnly
+                checked={!!selected}
+                className="h-4 w-4 accent-amber-600"
+                aria-label={`选择 ${product.name}`}
+              />
+            </label>
+          )}
           {product.image_urls?.[0] ? (
             <Image
               src={product.image_urls[0]}

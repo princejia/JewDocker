@@ -25,6 +25,31 @@ export default function ProductsPage() {
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [exporting, setExporting] = useState<"excel" | "pdf" | null>(null);
+  const [selected, setSelected] = useState<Record<string, Product>>({});
+
+  const selectedList = Object.values(selected);
+  const selectedCount = selectedList.length;
+  const selectedIds = new Set(Object.keys(selected));
+
+  function toggleSelect(p: Product) {
+    setSelected((prev) => {
+      const next = { ...prev };
+      if (next[p.id]) delete next[p.id];
+      else next[p.id] = p;
+      return next;
+    });
+  }
+
+  function toggleSelectAll(list: Product[], checked: boolean) {
+    setSelected((prev) => {
+      const next = { ...prev };
+      for (const p of list) {
+        if (checked) next[p.id] = p;
+        else delete next[p.id];
+      }
+      return next;
+    });
+  }
 
   const buildFilterParams = useCallback(() => {
     const params = new URLSearchParams();
@@ -32,6 +57,8 @@ export default function ProductsPage() {
     if (filters.status !== "all") params.set("status", filters.status);
     if (filters.is_loose_stone !== "all")
       params.set("is_loose_stone", filters.is_loose_stone);
+    if (filters.gemstone_category !== "all")
+      params.set("gemstone_category", filters.gemstone_category);
     if (filters.price_min) params.set("price_min", filters.price_min);
     if (filters.price_max) params.set("price_max", filters.price_max);
     params.set("sort_by", filters.sort_by);
@@ -81,10 +108,15 @@ export default function ProductsPage() {
     return all;
   }, [buildFilterParams]);
 
+  /** 导出/打印的范围：有勾选则仅包含勾选项，否则为当前筛选的全部 */
+  async function resolveExportTargets() {
+    return selectedCount > 0 ? selectedList : await fetchAllProducts();
+  }
+
   async function handleExportExcel() {
     setExporting("excel");
     try {
-      exportProductsToExcel(await fetchAllProducts());
+      exportProductsToExcel(await resolveExportTargets());
     } finally {
       setExporting(null);
     }
@@ -93,9 +125,9 @@ export default function ProductsPage() {
   async function handleExportLabels() {
     setExporting("pdf");
     try {
-      const all = await fetchAllProducts();
+      const targets = await resolveExportTargets();
       await saveLabelsPdf(
-        all.map((p) => ({
+        targets.map((p) => ({
           id: p.id,
           code: p.code ?? formatProductCode("P", p.created_at),
           name: p.name,
@@ -147,7 +179,7 @@ export default function ProductsPage() {
             ) : (
               <Download className="h-4 w-4" />
             )}
-            导出 Excel
+            导出 Excel{selectedCount > 0 ? `（${selectedCount}）` : ""}
           </Button>
           <Button
             variant="outline"
@@ -159,7 +191,7 @@ export default function ProductsPage() {
             ) : (
               <QrCode className="h-4 w-4" />
             )}
-            标签 PDF
+            标签 PDF{selectedCount > 0 ? `（${selectedCount}）` : ""}
           </Button>
           <Button asChild>
             <Link href="/products/new">
@@ -181,6 +213,21 @@ export default function ProductsPage() {
         }}
       />
 
+      {selectedCount > 0 && (
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900">
+          <span>
+            已选 <strong>{selectedCount}</strong> 件，导出 Excel
+            与标签 PDF 仅包含勾选项
+          </span>
+          <button
+            onClick={() => setSelected({})}
+            className="underline hover:text-amber-700"
+          >
+            清空选择
+          </button>
+        </div>
+      )}
+
       {loading ? (
         <div className="flex justify-center py-20">
           <Loader2 className="h-8 w-8 animate-spin text-amber-500" />
@@ -191,12 +238,22 @@ export default function ProductsPage() {
         ) : (
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
             {products.map((p) => (
-              <ProductCard key={p.id} product={p} />
+              <ProductCard
+                key={p.id}
+                product={p}
+                selected={selectedIds.has(p.id)}
+                onToggleSelect={toggleSelect}
+              />
             ))}
           </div>
         )
       ) : (
-        <ProductTable products={products} />
+        <ProductTable
+          products={products}
+          selectedIds={selectedIds}
+          onToggleSelect={toggleSelect}
+          onToggleSelectAll={toggleSelectAll}
+        />
       )}
 
       {totalPages > 1 && (

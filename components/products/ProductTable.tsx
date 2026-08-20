@@ -11,12 +11,39 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-export function ProductTable({ products }: { products: Product[] }) {
+export function ProductTable({
+  products,
+  selectedIds,
+  onToggleSelect,
+  onToggleSelectAll,
+}: {
+  products: Product[];
+  selectedIds?: Set<string>;
+  onToggleSelect?: (product: Product) => void;
+  onToggleSelectAll?: (products: Product[], checked: boolean) => void;
+}) {
+  const selectable = !!onToggleSelect;
+  const allChecked =
+    products.length > 0 && products.every((p) => selectedIds?.has(p.id));
+
   return (
     <div className="rounded-xl border bg-white">
       <Table>
         <TableHeader>
           <TableRow>
+            {selectable && (
+              <TableHead className="w-10">
+                <input
+                  type="checkbox"
+                  checked={allChecked}
+                  onChange={(e) =>
+                    onToggleSelectAll?.(products, e.target.checked)
+                  }
+                  className="h-4 w-4 accent-amber-600"
+                  aria-label="全选本页"
+                />
+              </TableHead>
+            )}
             <TableHead>编号</TableHead>
             <TableHead>产品名称</TableHead>
             <TableHead>状态</TableHead>
@@ -31,13 +58,27 @@ export function ProductTable({ products }: { products: Product[] }) {
         <TableBody>
           {products.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={9} className="text-center text-gray-400">
+              <TableCell
+                colSpan={selectable ? 10 : 9}
+                className="text-center text-gray-400"
+              >
                 暂无数据
               </TableCell>
             </TableRow>
           ) : (
             products.map((p) => (
               <TableRow key={p.id} className="cursor-pointer">
+                {selectable && (
+                  <TableCell>
+                    <input
+                      type="checkbox"
+                      checked={!!selectedIds?.has(p.id)}
+                      onChange={() => onToggleSelect?.(p)}
+                      className="h-4 w-4 accent-amber-600"
+                      aria-label={`选择 ${p.name}`}
+                    />
+                  </TableCell>
+                )}
                 <TableCell className="font-mono text-xs">
                   <Link
                     href={`/products/${p.id}`}
