@@ -19,8 +19,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { GEMSTONE_CATEGORY_SUGGESTIONS } from "@/lib/constants";
-import { saveLabelsPdf } from "@/lib/labels";
-import { formatProductCode } from "@/lib/utils";
+import { saveLabelsPdf, stoneLabelItem } from "@/lib/labels";
 
 const WEIGHT_UNIT_OPTIONS = ["克(g)", "克拉(ct)"];
 
@@ -313,18 +312,7 @@ export function LooseStoneFormDialog({
               {initial && (
                 <Button
                   variant="outline"
-                  onClick={() =>
-                    saveLabelsPdf([
-                      {
-                        id: initial.id,
-                        code:
-                          initial.code ??
-                          formatProductCode("L", initial.created_at),
-                        name: initial.material || "未命名",
-                        type: "stone",
-                      },
-                    ])
-                  }
+                  onClick={() => saveLabelsPdf([stoneLabelItem(initial)])}
                 >
                   <QrCode className="h-4 w-4" />
                   标签 PDF

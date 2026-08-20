@@ -5,8 +5,7 @@ import { Plus, LayoutGrid, List, Loader2, Download, QrCode } from "lucide-react"
 import { LooseStone } from "@/types";
 import { Button } from "@/components/ui/button";
 import { exportLooseStonesToExcel } from "@/lib/export";
-import { saveLabelsPdf } from "@/lib/labels";
-import { formatProductCode } from "@/lib/utils";
+import { saveLabelsPdf, stoneLabelItem } from "@/lib/labels";
 import { LooseStoneCard } from "@/components/loose-stones/LooseStoneCard";
 import { LooseStoneTable } from "@/components/loose-stones/LooseStoneTable";
 import { LooseStoneFormDialog } from "@/components/loose-stones/LooseStoneFormDialog";
@@ -134,16 +133,7 @@ export default function LooseStonesPage() {
           </Button>
           <Button
             variant="outline"
-            onClick={() =>
-              saveLabelsPdf(
-                stones.map((s) => ({
-                  id: s.id,
-                  code: s.code ?? formatProductCode("L", s.created_at),
-                  name: s.material || "未命名",
-                  type: "stone" as const,
-                })),
-              )
-            }
+            onClick={() => saveLabelsPdf(stones.map(stoneLabelItem))}
             disabled={stones.length === 0}
           >
             <QrCode className="h-4 w-4" />

@@ -6,6 +6,7 @@ import { Product } from "@/types";
 import { ProductForm } from "@/components/products/ProductForm";
 import { DeleteProductButton } from "@/components/products/DeleteProductButton";
 import { LabelPdfButton } from "@/components/products/LabelPdfButton";
+import { productLabelItem } from "@/lib/labels";
 import { formatProductCode } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -43,14 +44,7 @@ export default async function ProductDetailPage({
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <LabelPdfButton
-            item={{
-              id: product.id,
-              code: product.code ?? formatProductCode("P", product.created_at),
-              name: product.name,
-              type: "product",
-            }}
-          />
+          <LabelPdfButton item={productLabelItem(product)} />
           <DeleteProductButton id={product.id} />
         </div>
       </div>

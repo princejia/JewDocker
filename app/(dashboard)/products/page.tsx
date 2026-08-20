@@ -8,8 +8,7 @@ import { Button } from "@/components/ui/button";
 import { ProductCard } from "@/components/products/ProductCard";
 import { ProductTable } from "@/components/products/ProductTable";
 import { exportProductsToExcel } from "@/lib/export";
-import { saveLabelsPdf } from "@/lib/labels";
-import { formatProductCode } from "@/lib/utils";
+import { saveLabelsPdf, productLabelItem } from "@/lib/labels";
 import {
   ProductFilters,
   ProductFilterState,
@@ -126,14 +125,7 @@ export default function ProductsPage() {
     setExporting("pdf");
     try {
       const targets = await resolveExportTargets();
-      await saveLabelsPdf(
-        targets.map((p) => ({
-          id: p.id,
-          code: p.code ?? formatProductCode("P", p.created_at),
-          name: p.name,
-          type: "product" as const,
-        })),
-      );
+      await saveLabelsPdf(targets.map(productLabelItem));
     } finally {
       setExporting(null);
     }

@@ -1,11 +1,53 @@
 import QRCode from "qrcode";
 import { jsPDF } from "jspdf";
+import { LooseStone, Product } from "@/types";
 
 export interface LabelItem {
   id: string;
   code: string;
   name: string;
   type: "product" | "stone";
+  /** 售价，为空或 0 时不打印 */
+  price?: number | null;
+  size?: string | null;
+  origin?: string | null;
+  weight?: number | null;
+  weightUnit?: string | null;
+  inlaidStones?: string | null;
+  /** 工费销售价格（g/元） */
+  laborPrice?: number | null;
+  surcharge?: number | null;
+}
+
+export function productLabelItem(p: Product): LabelItem {
+  return {
+    id: p.id,
+    code: p.code ?? "",
+    name: p.name,
+    type: "product",
+    price: p.price,
+    size: p.size,
+    origin: p.origin,
+    weight: p.total_weight,
+    weightUnit: p.weight_unit,
+    inlaidStones: p.inlaid_stones,
+    laborPrice: p.labor_sale_price,
+    surcharge: p.surcharge,
+  };
+}
+
+export function stoneLabelItem(s: LooseStone): LabelItem {
+  return {
+    id: s.id,
+    code: s.code ?? "",
+    name: s.material || "未命名",
+    type: "stone",
+    price: s.price,
+    size: s.size,
+    origin: s.origin,
+    weight: s.weight,
+    weightUnit: s.weight_unit,
+  };
 }
 
 /**
@@ -23,13 +65,16 @@ function buildQrPayload(item: LabelItem, origin: string): string {
 const LABEL_W = 30;
 const LABEL_H = 25;
 const FOLD_X = LABEL_W / 2;
-// 二维码占左半面，与折痕 / 标签边缘各留 1mm 的白边兼作静区
-const QR_SIZE = 13;
+// 左半面：二维码在上，售价在下
+const QR_SIZE = 12;
 const QR_X = (FOLD_X - QR_SIZE) / 2;
-const QR_Y = (LABEL_H - QR_SIZE) / 2;
+const QR_Y = 2;
+const PRICE_Y = QR_Y + QR_SIZE + 1.5;
 // 右半面文字区
 const TEXT_X = FOLD_X + 1;
 const TEXT_W = LABEL_W - TEXT_X - 1;
+const NAME_LINE_H = 2;
+const FIELD_LINE_H = 2;
 // G530 为 300dpi（≈11.8 点/mm），画布按 12px/mm 渲染后略微缩小，边缘更锐利
 const PX_PER_MM = 12;
 
@@ -83,14 +128,35 @@ function wrapText(
   return lines;
 }
 
+const num = (v: number) =>
+  Number.isInteger(v) ? String(v) : String(Number(v.toFixed(3)));
+
+/** 右半面字段行，值为空或 0 的字段整行省略。 */
+function fieldLines(item: LabelItem): string[] {
+  const lines: string[] = [];
+  const push = (label: string, value: string | null | undefined) => {
+    if (value) lines.push(`${label} ${value}`);
+  };
+
+  push("尺寸", item.size);
+  push("产地", item.origin);
+  if (item.weight) {
+    push("重量", `${num(Number(item.weight))}${item.weightUnit || ""}`);
+  }
+  push("配石", item.inlaidStones);
+  if (item.laborPrice) push("工费", `${num(Number(item.laborPrice))}/g`);
+  if (item.surcharge) push("附加费", num(Number(item.surcharge)));
+
+  return lines;
+}
+
 /**
  * 将单张标签渲染到 canvas（使用浏览器字体，支持中文，避免 PDF 内置字体乱码）。
- * 版面：左半面二维码居中，右半面从上到下为编号与名称。返回 PNG DataURL。
+ * 版面：左半面二维码 + 售价，右半面产品名称与规格字段。返回 PNG DataURL。
  */
 async function renderLabelImage(
   qrDataUrl: string,
-  code: string,
-  name: string,
+  item: LabelItem,
 ): Promise<string> {
   const w = LABEL_W * PX_PER_MM;
   const h = LABEL_H * PX_PER_MM;
@@ -110,19 +176,38 @@ async function renderLabelImage(
     QR_SIZE * PX_PER_MM,
   );
 
-  const textX = TEXT_X * PX_PER_MM;
-  const textW = TEXT_W * PX_PER_MM;
   ctx.textBaseline = "top";
-  ctx.textAlign = "left";
   ctx.fillStyle = "#000";
 
-  ctx.font = "600 15px 'Consolas', 'Microsoft YaHei', monospace";
-  ctx.fillText(truncate(ctx, code, textW), textX, 7 * PX_PER_MM);
+  const price = Number(item.price || 0);
+  if (price > 0) {
+    ctx.textAlign = "center";
+    ctx.font = "700 18px 'Microsoft YaHei', sans-serif";
+    ctx.fillText(
+      `¥${price.toLocaleString()}`,
+      (FOLD_X / 2) * PX_PER_MM,
+      PRICE_Y * PX_PER_MM,
+    );
+  }
 
-  ctx.font = "700 20px 'Microsoft YaHei', sans-serif";
-  wrapText(ctx, name, textW, 3).forEach((ln, i) => {
-    ctx.fillText(ln, textX, (10 + i * 2.5) * PX_PER_MM);
+  const textX = TEXT_X * PX_PER_MM;
+  const textW = TEXT_W * PX_PER_MM;
+  ctx.textAlign = "left";
+
+  let y = 1.2;
+  ctx.font = "700 17px 'Microsoft YaHei', sans-serif";
+  wrapText(ctx, item.name, textW, 2).forEach((ln) => {
+    ctx.fillText(ln, textX, y * PX_PER_MM);
+    y += NAME_LINE_H;
   });
+
+  y += 0.4;
+  ctx.font = "400 14px 'Microsoft YaHei', sans-serif";
+  for (const line of fieldLines(item)) {
+    if (y + FIELD_LINE_H > LABEL_H - 0.5) break;
+    ctx.fillText(truncate(ctx, line, textW), textX, y * PX_PER_MM);
+    y += FIELD_LINE_H;
+  }
 
   return canvas.toDataURL("image/png");
 }
@@ -148,7 +233,7 @@ export async function saveLabelsPdf(items: LabelItem[]): Promise<void> {
       width: 480,
       errorCorrectionLevel: "M",
     });
-    const labelImg = await renderLabelImage(qr, item.code, item.name);
+    const labelImg = await renderLabelImage(qr, item);
     doc.addImage(labelImg, "PNG", 0, 0, LABEL_W, LABEL_H);
   }
 
