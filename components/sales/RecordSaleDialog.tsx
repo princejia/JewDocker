@@ -28,7 +28,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 
-const PAYMENT_METHODS = ["现金", "微信", "支付宝", "银行转账"];
+const PAYMENT_METHODS = ["现金", "微信", "支付宝", "银行转账", "信用卡"];
 const NO_CUSTOMER = "__none__";
 
 type ItemType = "product" | "loose_stone";

@@ -24,7 +24,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-const PAYMENT_METHODS = ["现金", "微信", "支付宝", "银行转账"];
+const PAYMENT_METHODS = ["现金", "微信", "支付宝", "银行转账", "信用卡"];
 const NO_CUSTOMER = "__none__";
 
 export function SaleRowActions({ sale }: { sale: ProductSaleWithRelations }) {

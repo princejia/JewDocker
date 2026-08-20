@@ -110,7 +110,7 @@
 | loose_stone_id | 裸石ID | UUID FK | 关联 loose_stones.id，可为空（出售产品时为空） |
 | customer_id | 客户ID | UUID FK | 关联 customers.id，可为空 |
 | sale_price | 成交价格 | DECIMAL(12,2) | 实际成交金额 |
-| payment_method | 付款方式 | VARCHAR(50) | 现金/微信/支付宝/银行转账 |
+| payment_method | 付款方式 | VARCHAR(50) | 现金/微信/支付宝/银行转账/信用卡 |
 | sold_at | 成交时间 | DATE | 实际售出日期 |
 | created_at | 记录时间 | TIMESTAMPTZ | 自动设置 |
 
