@@ -257,7 +257,10 @@ export default async function ReportsPage() {
                         {days} 天
                       </TableCell>
                       <TableCell className="text-right text-green-700">
-                        {formatCurrency(product.profit)}
+                        {formatCurrency(
+                          Number(product.sale_price || 0) -
+                            purchaseCostOf(product)
+                        )}
                       </TableCell>
                     </TableRow>
                   ))
@@ -279,7 +282,7 @@ export default async function ReportsPage() {
                 <TableRow>
                   <TableHead>产品</TableHead>
                   <TableHead className="text-right">已持有</TableHead>
-                  <TableHead className="text-right">价格</TableHead>
+                  <TableHead className="text-right">进货成本</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -299,7 +302,7 @@ export default async function ReportsPage() {
                         {days} 天
                       </TableCell>
                       <TableCell className="text-right text-amber-700">
-                        {formatCurrency(product.price)}
+                        {formatCurrency(purchaseCostOf(product))}
                       </TableCell>
                     </TableRow>
                   ))
