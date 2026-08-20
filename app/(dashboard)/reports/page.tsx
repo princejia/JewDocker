@@ -1,5 +1,5 @@
 import { createServerClient } from "@/lib/supabase-server";
-import { Product } from "@/types";
+import { LooseStone, Product } from "@/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatsCard } from "@/components/ui/StatsCard";
 import { ProfitChart, ProfitDatum } from "@/components/reports/ProfitChart";
@@ -21,10 +21,36 @@ import { Coins, HelpCircle, Timer } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
+interface SaleWithItem {
+  id: string;
+  sale_price: number;
+  sold_at: string;
+  products: Product | null;
+  loose_stones: LooseStone | null;
+}
+
 export default async function ReportsPage() {
   const supabase = createServerClient();
   const { data } = await supabase.from("products").select("*");
   const list: Product[] = data ?? [];
+
+  // 销售额/利润以 product_sales 流水为准（products 表只保留最后一次成交）
+  // 借售（关联物品当前为 consignment）尚未收款，不计入
+  const { data: salesData } = await supabase
+    .from("product_sales")
+    .select("id, sale_price, sold_at, products(*), loose_stones(*)")
+    .order("sold_at", { ascending: false })
+    .order("created_at", { ascending: false });
+
+  const sales = ((salesData ?? []) as unknown as SaleWithItem[]).filter(
+    (s) =>
+      (s.products?.sale_status ?? s.loose_stones?.sale_status) !== "consignment"
+  );
+
+  const saleCost = (s: SaleWithItem) =>
+    s.products
+      ? purchaseCostOf(s.products)
+      : Number(s.loose_stones?.purchase_price || 0);
 
   // 库存成本
   const inStock = list.filter((p) => p.sale_status === "in_stock");
@@ -34,34 +60,33 @@ export default async function ReportsPage() {
   const days: ProfitDatum[] = [];
   for (let i = 29; i >= 0; i--) {
     const d = new Date(Date.now() - i * 86400000).toISOString().slice(0, 10);
-    const sold = list.filter((p) => p.sold_at === d);
+    const daySales = sales.filter((s) => s.sold_at === d);
     days.push({
       date: d.slice(5),
-      revenue: sold.reduce((s, p) => s + Number(p.sale_price || 0), 0),
-      profit: sold.reduce(
-        (s, p) => s + (Number(p.sale_price || 0) - purchaseCostOf(p)),
+      revenue: daySales.reduce((sum, s) => sum + Number(s.sale_price || 0), 0),
+      profit: daySales.reduce(
+        (sum, s) => sum + (Number(s.sale_price || 0) - saleCost(s)),
         0
       ),
     });
   }
 
-  // 全部已售产品的利润明细
-  const profitRows: ProfitRow[] = list
-    .filter((p) => p.sale_status === "sold")
-    .sort((a, b) => (b.sold_at ?? "").localeCompare(a.sold_at ?? ""))
-    .map((p) => {
-      const cost = purchaseCostOf(p);
-      const salePrice = Number(p.sale_price || 0);
-      return {
-        id: p.id,
-        code: p.code ?? formatProductCode("P", p.created_at),
-        name: p.name,
-        sold_at: p.sold_at,
-        sale_price: salePrice,
-        cost,
-        profit: salePrice - cost,
-      };
-    });
+  // 全部成交流水的利润明细
+  const profitRows: ProfitRow[] = sales.map((s) => {
+    const cost = saleCost(s);
+    const salePrice = Number(s.sale_price || 0);
+    const item = s.products ?? s.loose_stones;
+    return {
+      id: s.id,
+      code:
+        item?.code ?? formatProductCode(s.products ? "P" : "L", item?.created_at),
+      name: s.products?.name ?? s.loose_stones?.material ?? "已删除物品",
+      sold_at: s.sold_at,
+      sale_price: salePrice,
+      cost,
+      profit: salePrice - cost,
+    };
+  });
 
   // 未结款汇总（仅借售，在库/已售不计入未结款）
   const unsettledList = list
