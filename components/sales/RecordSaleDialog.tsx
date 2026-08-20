@@ -34,8 +34,8 @@ const NO_CUSTOMER = "__none__";
 type ItemType = "product" | "loose_stone";
 type SaleType = "sold" | "consignment";
 
-const PREVIEW_WIDTH = 256;
-const PREVIEW_HEIGHT = 320;
+const PREVIEW_WIDTH = 288;
+const PREVIEW_HEIGHT = 180;
 
 /** 产品下拉项的悬停预览：跟随鼠标定位，避开下拉框的 overflow-hidden 裁切 */
 function ProductPreview({
@@ -62,40 +62,42 @@ function ProductPreview({
 
   return createPortal(
     <div
-      className="pointer-events-none fixed z-[100] hidden w-64 rounded-lg border border-gray-200 bg-white p-3 shadow-xl md:block"
+      className="pointer-events-none fixed z-[100] hidden w-72 gap-3 rounded-lg border border-gray-200 bg-white p-3 shadow-xl md:flex"
       style={{
         left: Math.min(x + 16, window.innerWidth - PREVIEW_WIDTH - 8),
         top: Math.min(y, window.innerHeight - PREVIEW_HEIGHT - 8),
       }}
     >
-      <div className="relative mb-2 aspect-square overflow-hidden rounded-md bg-gray-50">
+      <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-md bg-gray-50">
         {product.image_urls?.[0] ? (
           <Image
             src={product.image_urls[0]}
             alt={product.name}
             fill
             className="object-cover"
-            sizes="256px"
+            sizes="80px"
           />
         ) : (
-          <div className="flex h-full w-full items-center justify-center text-3xl text-gray-300">
+          <div className="flex h-full w-full items-center justify-center text-2xl text-gray-300">
             💎
           </div>
         )}
       </div>
-      <p className="mb-1 truncate text-sm font-semibold text-gray-900">
-        {product.name}
-      </p>
-      <dl className="space-y-0.5 text-xs text-gray-600">
-        {rows
-          .filter(([, v]) => v)
-          .map(([label, value]) => (
-            <div key={label} className="flex gap-2">
-              <dt className="shrink-0 text-gray-400">{label}</dt>
-              <dd className="truncate">{value}</dd>
-            </div>
-          ))}
-      </dl>
+      <div className="min-w-0 flex-1">
+        <p className="mb-1 truncate text-sm font-semibold text-gray-900">
+          {product.name}
+        </p>
+        <dl className="space-y-0.5 text-xs text-gray-600">
+          {rows
+            .filter(([, v]) => v)
+            .map(([label, value]) => (
+              <div key={label} className="flex gap-2">
+                <dt className="shrink-0 text-gray-400">{label}</dt>
+                <dd className="truncate">{value}</dd>
+              </div>
+            ))}
+        </dl>
+      </div>
     </div>,
     document.body
   );
