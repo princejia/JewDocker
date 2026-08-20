@@ -65,16 +65,16 @@ function buildQrPayload(item: LabelItem, origin: string): string {
 const LABEL_W = 30;
 const LABEL_H = 25;
 const FOLD_X = LABEL_W / 2;
-// 左半面：二维码在上，售价在下
+// 每面内容整体逆时针旋转 90°：旋转后可用区域为 25mm(宽) × 15mm(高)
+const FACE_W = LABEL_H;
+const FACE_H = FOLD_X;
+const MARGIN = 1;
+// 左面：二维码在左，售价在右
 const QR_SIZE = 12;
-const QR_X = (FOLD_X - QR_SIZE) / 2;
-const QR_Y = 2;
-const PRICE_Y = QR_Y + QR_SIZE + 1.5;
-// 右半面文字区
-const TEXT_X = FOLD_X + 1;
-const TEXT_W = LABEL_W - TEXT_X - 1;
+// 右面文字区
+const TEXT_W = FACE_W - MARGIN * 2;
 const NAME_LINE_H = 2;
-const FIELD_LINE_H = 2;
+const FIELD_LINE_H = 1.6;
 // G530 为 300dpi（≈11.8 点/mm），画布按 12px/mm 渲染后略微缩小，边缘更锐利
 const PX_PER_MM = 12;
 
@@ -152,7 +152,8 @@ function fieldValues(item: LabelItem): { text: string; wrap?: boolean }[] {
 
 /**
  * 将单张标签渲染到 canvas（使用浏览器字体，支持中文，避免 PDF 内置字体乱码）。
- * 版面：左半面二维码 + 售价，右半面产品名称与规格字段。返回 PNG DataURL。
+ * 两个可见面的内容各自逆时针旋转 90°，文字沿标签长边排布。
+ * 左面：二维码 + 售价；右面：产品名称与规格字段。返回 PNG DataURL。
  */
 async function renderLabelImage(
   qrDataUrl: string,
@@ -167,52 +168,71 @@ async function renderLabelImage(
   ctx.fillStyle = "#fff";
   ctx.fillRect(0, 0, w, h);
 
-  const qrImg = await loadImage(qrDataUrl);
-  ctx.drawImage(
-    qrImg,
-    QR_X * PX_PER_MM,
-    QR_Y * PX_PER_MM,
-    QR_SIZE * PX_PER_MM,
-    QR_SIZE * PX_PER_MM,
-  );
-
   ctx.textBaseline = "top";
   ctx.fillStyle = "#000";
 
-  const price = Number(item.price || 0);
-  if (price > 0) {
-    ctx.textAlign = "center";
-    ctx.font = "700 18px 'Microsoft YaHei', sans-serif";
-    ctx.fillText(
-      `¥${price.toLocaleString()}`,
-      (FOLD_X / 2) * PX_PER_MM,
-      PRICE_Y * PX_PER_MM,
+  /** 把绘制坐标系切到指定面并旋转 90°，局部坐标为 25mm(x) × 15mm(y) */
+  const inFace = (face: 0 | 1, draw: () => void) => {
+    ctx.save();
+    ctx.translate(face * FOLD_X * PX_PER_MM, LABEL_H * PX_PER_MM);
+    ctx.rotate(-Math.PI / 2);
+    draw();
+    ctx.restore();
+  };
+
+  const qrImg = await loadImage(qrDataUrl);
+  inFace(0, () => {
+    const qrY = (FACE_H - QR_SIZE) / 2;
+    ctx.drawImage(
+      qrImg,
+      MARGIN * PX_PER_MM,
+      qrY * PX_PER_MM,
+      QR_SIZE * PX_PER_MM,
+      QR_SIZE * PX_PER_MM,
     );
-  }
 
-  const textX = TEXT_X * PX_PER_MM;
-  const textW = TEXT_W * PX_PER_MM;
-  ctx.textAlign = "left";
-
-  let y = 1.2;
-  ctx.font = "700 17px 'Microsoft YaHei', sans-serif";
-  wrapText(ctx, item.name, textW, 2).forEach((ln) => {
-    ctx.fillText(ln, textX, y * PX_PER_MM);
-    y += NAME_LINE_H;
+    const price = Number(item.price || 0);
+    if (price > 0) {
+      ctx.textAlign = "left";
+      ctx.font = "700 20px 'Microsoft YaHei', sans-serif";
+      const priceX = MARGIN + QR_SIZE + 1.5;
+      ctx.fillText(
+        truncate(
+          ctx,
+          `¥${price.toLocaleString()}`,
+          (FACE_W - priceX - MARGIN) * PX_PER_MM,
+        ),
+        priceX * PX_PER_MM,
+        (FACE_H / 2 - 1) * PX_PER_MM,
+      );
+    }
   });
 
-  y += 0.4;
-  ctx.font = "400 14px 'Microsoft YaHei', sans-serif";
-  for (const field of fieldValues(item)) {
-    const lines = field.wrap
-      ? wrapText(ctx, field.text, textW, 3)
-      : [truncate(ctx, field.text, textW)];
-    for (const line of lines) {
-      if (y + FIELD_LINE_H > LABEL_H - 0.5) return canvas.toDataURL("image/png");
-      ctx.fillText(line, textX, y * PX_PER_MM);
-      y += FIELD_LINE_H;
+  inFace(1, () => {
+    const textX = MARGIN * PX_PER_MM;
+    const textW = TEXT_W * PX_PER_MM;
+    ctx.textAlign = "left";
+
+    let y = 0.8;
+    ctx.font = "700 15px 'Microsoft YaHei', sans-serif";
+    wrapText(ctx, item.name, textW, 2).forEach((ln) => {
+      ctx.fillText(ln, textX, y * PX_PER_MM);
+      y += NAME_LINE_H;
+    });
+
+    y += 0.3;
+    ctx.font = "400 12px 'Microsoft YaHei', sans-serif";
+    for (const field of fieldValues(item)) {
+      const lines = field.wrap
+        ? wrapText(ctx, field.text, textW, 2)
+        : [truncate(ctx, field.text, textW)];
+      for (const line of lines) {
+        if (y + FIELD_LINE_H > FACE_H - 0.3) return;
+        ctx.fillText(line, textX, y * PX_PER_MM);
+        y += FIELD_LINE_H;
+      }
     }
-  }
+  });
 
   return canvas.toDataURL("image/png");
 }
