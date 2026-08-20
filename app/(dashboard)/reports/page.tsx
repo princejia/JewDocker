@@ -4,6 +4,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatsCard } from "@/components/ui/StatsCard";
 import { ProfitChart, ProfitDatum } from "@/components/reports/ProfitChart";
 import {
+  ProfitDetailTable,
+  ProfitRow,
+} from "@/components/reports/ProfitDetailTable";
+import {
   Table,
   TableBody,
   TableCell,
@@ -11,7 +15,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatCurrency, formatDate, formatProductCode } from "@/lib/utils";
 import { purchaseCostOf } from "@/lib/constants";
 import { Coins, HelpCircle, Timer } from "lucide-react";
 
@@ -40,6 +44,24 @@ export default async function ReportsPage() {
       ),
     });
   }
+
+  // 全部已售产品的利润明细
+  const profitRows: ProfitRow[] = list
+    .filter((p) => p.sale_status === "sold")
+    .sort((a, b) => (b.sold_at ?? "").localeCompare(a.sold_at ?? ""))
+    .map((p) => {
+      const cost = purchaseCostOf(p);
+      const salePrice = Number(p.sale_price || 0);
+      return {
+        id: p.id,
+        code: p.code ?? formatProductCode("P", p.created_at),
+        name: p.name,
+        sold_at: p.sold_at,
+        sale_price: salePrice,
+        cost,
+        profit: salePrice - cost,
+      };
+    });
 
   // 未结款汇总（仅借售，在库/已售不计入未结款）
   const unsettledList = list
@@ -138,6 +160,15 @@ export default async function ReportsPage() {
         </CardHeader>
         <CardContent>
           <ProfitChart data={days} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">已售产品利润明细</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ProfitDetailTable rows={profitRows} />
         </CardContent>
       </Card>
 
