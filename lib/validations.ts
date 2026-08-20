@@ -108,3 +108,12 @@ export const returnSchema = z.object({
 });
 
 export type ReturnSchema = z.infer<typeof returnSchema>;
+
+export const recycleSchema = z.object({
+  category: z.enum(["黄金", "宝石"]),
+  recycled_at: z.string().min(1, "日期必填"),
+  product_ids: z.array(z.string().uuid()).default([]),
+  notes: z.string().max(2000).nullable().optional(),
+});
+
+export type RecycleSchema = z.infer<typeof recycleSchema>;

@@ -145,8 +145,19 @@ export type ItemLoanInput = {
   notes: string | null;
 };
 
-export interface ProductReturn {
+export const RECYCLE_CATEGORIES = ["黄金", "宝石"] as const;
+export type RecycleCategory = (typeof RECYCLE_CATEGORIES)[number];
+
+export interface Recycle {
   id: string;
+  category: RecycleCategory;
+  recycled_at: string;
+  product_ids: string[];
+  notes: string | null;
+  created_at: string;
+}
+
+export interface ProductReturn {  id: string;
   sale_id: string | null;
   product_id: string | null;
   customer_id: string | null;

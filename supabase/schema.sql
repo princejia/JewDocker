@@ -225,6 +225,20 @@ CREATE INDEX IF NOT EXISTS idx_item_loans_loose_stone ON item_loans(loose_stone_
 CREATE INDEX IF NOT EXISTS idx_item_loans_returned ON item_loans(returned_at);
 
 -- ------------------------------------------------------------
+-- 回收记录表（关联产品用 UUID 数组，一条回收可关联多件产品）
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS recycles (
+  id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  category     VARCHAR(20) NOT NULL,
+  recycled_at  DATE NOT NULL DEFAULT CURRENT_DATE,
+  product_ids  UUID[] DEFAULT '{}',
+  notes        TEXT,
+  created_at   TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_recycles_recycled_at ON recycles(recycled_at DESC);
+
+-- ------------------------------------------------------------
 -- 自动更新 updated_at 触发器
 -- ------------------------------------------------------------
 CREATE OR REPLACE FUNCTION update_updated_at()
@@ -339,6 +353,7 @@ ALTER TABLE product_sales ENABLE ROW LEVEL SECURITY;
 ALTER TABLE loose_stones ENABLE ROW LEVEL SECURITY;
 ALTER TABLE product_returns ENABLE ROW LEVEL SECURITY;
 ALTER TABLE item_loans ENABLE ROW LEVEL SECURITY;
+ALTER TABLE recycles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE record_code_seq ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Authenticated users can read products" ON products;
@@ -374,6 +389,11 @@ CREATE POLICY "Authenticated users can manage returns"
 DROP POLICY IF EXISTS "Authenticated users can manage loans" ON item_loans;
 CREATE POLICY "Authenticated users can manage loans"
   ON item_loans FOR ALL
+  TO authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Authenticated users can manage recycles" ON recycles;
+CREATE POLICY "Authenticated users can manage recycles"
+  ON recycles FOR ALL
   TO authenticated USING (true) WITH CHECK (true);
 
 -- ============================================================

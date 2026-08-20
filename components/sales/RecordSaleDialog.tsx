@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
-import Image from "next/image";
 import { ChevronDown, Plus } from "lucide-react";
 import { Product, Customer, LooseStone } from "@/types";
 import { formatProductCode, cn } from "@/lib/utils";
-import { categoryLabel } from "@/lib/constants";
+import {
+  ProductHoverPreview,
+  HoverPreview,
+} from "@/components/products/ProductHoverPreview";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -42,75 +43,6 @@ type PickItem = {
   product?: Product;
 };
 
-const PREVIEW_WIDTH = 288;
-const PREVIEW_HEIGHT = 180;
-
-/** 产品下拉项的悬停预览：跟随鼠标定位，避开下拉框的 overflow-hidden 裁切 */
-function ProductPreview({
-  product,
-  x,
-  y,
-}: {
-  product: Product;
-  x: number;
-  y: number;
-}) {
-  const rows: [string, string | null][] = [
-    [
-      "重量",
-      product.total_weight != null
-        ? `${product.total_weight} ${product.weight_unit || "克(g)"}`
-        : null,
-    ],
-    ["尺寸", product.size],
-    ["镶嵌配石", product.inlaid_stones],
-    ["宝石分类", categoryLabel(product.gemstone_category) || null],
-    ["功能分类", categoryLabel(product.function_category) || null],
-  ];
-
-  return createPortal(
-    <div
-      className="pointer-events-none fixed z-[100] hidden w-72 gap-3 rounded-lg border border-gray-200 bg-white p-3 shadow-xl md:flex"
-      style={{
-        left: Math.min(x + 16, window.innerWidth - PREVIEW_WIDTH - 8),
-        top: Math.min(y, window.innerHeight - PREVIEW_HEIGHT - 8),
-      }}
-    >
-      <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-md bg-gray-50">
-        {product.image_urls?.[0] ? (
-          <Image
-            src={product.image_urls[0]}
-            alt={product.name}
-            fill
-            className="object-cover"
-            sizes="80px"
-          />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center text-2xl text-gray-300">
-            💎
-          </div>
-        )}
-      </div>
-      <div className="min-w-0 flex-1">
-        <p className="mb-1 truncate text-sm font-semibold text-gray-900">
-          {product.name}
-        </p>
-        <dl className="space-y-0.5 text-xs text-gray-600">
-          {rows
-            .filter(([, v]) => v)
-            .map(([label, value]) => (
-              <div key={label} className="flex gap-2">
-                <dt className="shrink-0 text-gray-400">{label}</dt>
-                <dd className="truncate">{value}</dd>
-              </div>
-            ))}
-        </dl>
-      </div>
-    </div>,
-    document.body
-  );
-}
-
 export function RecordSaleDialog() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -131,11 +63,7 @@ export function RecordSaleDialog() {
   const [paymentMethod, setPaymentMethod] = useState("");
   const [soldAt, setSoldAt] = useState(new Date().toISOString().slice(0, 10));
   const [notes, setNotes] = useState("");
-  const [preview, setPreview] = useState<{
-    product: Product;
-    x: number;
-    y: number;
-  } | null>(null);
+  const [preview, setPreview] = useState<HoverPreview | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -494,7 +422,7 @@ export function RecordSaleDialog() {
         </DialogFooter>
       </DialogContent>
       {preview && (
-        <ProductPreview
+        <ProductHoverPreview
           product={preview.product}
           x={preview.x}
           y={preview.y}
