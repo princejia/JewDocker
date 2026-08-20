@@ -11,10 +11,18 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { StatusPieChart } from "@/components/reports/StatusPieChart";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import { Product } from "@/types";
+import { purchaseCostOf } from "@/lib/constants";
+import { LooseStone, Product } from "@/types";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
+
+interface MonthSale {
+  sale_price: number;
+  sold_at: string;
+  products: Product | null;
+  loose_stones: LooseStone | null;
+}
 
 function monthStart(): string {
   const d = new Date();
@@ -43,21 +51,29 @@ export default async function DashboardPage() {
   ];
 
   const ms = monthStart();
-  const soldThisMonth = list.filter(
-    (p) => p.sold_at && p.sold_at >= ms
+
+  // 本月销售额/利润以 product_sales 流水为准（products 表只保留最后一次成交）
+  // 借售（关联物品当前为 consignment）尚未收款，不计入销售额
+  const { data: salesData } = await supabase
+    .from("product_sales")
+    .select("sale_price, sold_at, products(*), loose_stones(*)")
+    .gte("sold_at", ms);
+
+  const monthSales = (salesData ?? []) as unknown as MonthSale[];
+  const settledSales = monthSales.filter(
+    (s) =>
+      (s.products?.sale_status ?? s.loose_stones?.sale_status) !== "consignment"
   );
-  const monthRevenueGross = soldThisMonth.reduce(
-    (s, p) => s + Number(p.sale_price || 0) - Number(p.unsettled_amount || 0),
+  const monthRevenueGross = settledSales.reduce(
+    (sum, s) => sum + Number(s.sale_price || 0),
     0
   );
-  const monthProfitGross = soldThisMonth.reduce(
-    (s, p) =>
-      s +
-      (Number(p.sale_price || 0) -
-        Number(p.unsettled_amount || 0) -
-        Number(p.purchase_price || 0)),
-    0
-  );
+  const monthProfitGross = settledSales.reduce((sum, s) => {
+    const cost = s.products
+      ? purchaseCostOf(s.products)
+      : Number(s.loose_stones?.purchase_price || 0);
+    return sum + Number(s.sale_price || 0) - cost;
+  }, 0);
 
   // 本月退货：抵减销售额与利润，保持与销售记录同步
   const { data: returnsData } = await supabase
