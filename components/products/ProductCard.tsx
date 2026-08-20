@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { Product } from "@/types";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { SelectionCheckbox } from "@/components/ui/SelectionCheckbox";
 import { formatCurrency, formatDate, formatProductCode } from "@/lib/utils";
 
 export function ProductCard({
@@ -15,26 +16,22 @@ export function ProductCard({
 }) {
   return (
     <Link href={`/products/${product.id}`}>
-      <div className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm transition-shadow hover:shadow-md">
+      <div
+        className={`overflow-hidden rounded-xl border bg-white shadow-sm transition-shadow hover:shadow-md ${
+          selected
+            ? "border-amber-500 ring-2 ring-amber-400"
+            : "border-gray-100"
+        }`}
+      >
         {/* 产品图片 */}
         <div className="relative aspect-square bg-gray-50">
           {onToggleSelect && (
-            <label
-              className="absolute left-2 top-2 z-10 flex h-6 w-6 items-center justify-center rounded-md bg-white/90 shadow-sm"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                onToggleSelect(product);
-              }}
-            >
-              <input
-                type="checkbox"
-                readOnly
-                checked={!!selected}
-                className="h-4 w-4 accent-amber-600"
-                aria-label={`选择 ${product.name}`}
-              />
-            </label>
+            <SelectionCheckbox
+              checked={!!selected}
+              onToggle={() => onToggleSelect(product)}
+              label={`选择 ${product.name}`}
+              className="absolute left-2 top-2 z-10 shadow-sm"
+            />
           )}
           {product.image_urls?.[0] ? (
             <Image

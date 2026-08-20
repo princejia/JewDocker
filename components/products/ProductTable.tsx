@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Product } from "@/types";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { SelectionCheckbox } from "@/components/ui/SelectionCheckbox";
 import { formatCurrency, formatDate, formatProductCode } from "@/lib/utils";
 import {
   Table,
@@ -33,14 +34,10 @@ export function ProductTable({
           <TableRow>
             {selectable && (
               <TableHead className="w-10">
-                <input
-                  type="checkbox"
+                <SelectionCheckbox
                   checked={allChecked}
-                  onChange={(e) =>
-                    onToggleSelectAll?.(products, e.target.checked)
-                  }
-                  className="h-4 w-4 accent-amber-600"
-                  aria-label="全选本页"
+                  onToggle={() => onToggleSelectAll?.(products, !allChecked)}
+                  label="全选本页"
                 />
               </TableHead>
             )}
@@ -67,15 +64,18 @@ export function ProductTable({
             </TableRow>
           ) : (
             products.map((p) => (
-              <TableRow key={p.id} className="cursor-pointer">
+              <TableRow
+                key={p.id}
+                className={`cursor-pointer ${
+                  selectedIds?.has(p.id) ? "bg-amber-50" : ""
+                }`}
+              >
                 {selectable && (
                   <TableCell>
-                    <input
-                      type="checkbox"
+                    <SelectionCheckbox
                       checked={!!selectedIds?.has(p.id)}
-                      onChange={() => onToggleSelect?.(p)}
-                      className="h-4 w-4 accent-amber-600"
-                      aria-label={`选择 ${p.name}`}
+                      onToggle={() => onToggleSelect?.(p)}
+                      label={`选择 ${p.name}`}
                     />
                   </TableCell>
                 )}
