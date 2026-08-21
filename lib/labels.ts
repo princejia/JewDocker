@@ -60,21 +60,19 @@ function buildQrPayload(item: LabelItem, origin: string): string {
   return `${origin}/v/${t}/${encodeURIComponent(item.id)}`;
 }
 
-// 单张标签尺寸（mm），对应 Godex G530 使用的 30×25mm 对折标
-// 折痕在 30mm 的正中间，两侧各为 15×25mm 的可见面，内容不得跨越折痕
-const LABEL_W = 30;
-const LABEL_H = 25;
-const FOLD_X = LABEL_W / 2;
-// 每面内容整体逆时针旋转 90°：旋转后可用区域为 25mm(宽) × 15mm(高)
-const FACE_W = LABEL_H;
-const FACE_H = FOLD_X;
-const MARGIN = 1;
+// 单张标签尺寸（mm）：Godex G530 走纸时 25mm 边先出，故打印宽度 25、走纸长度 30
+// 折痕是 y=15mm 的横线，把标签分成上下两个 25×15mm 的可见面，内容不得跨越折痕
+const LABEL_W = 25;
+const LABEL_H = 30;
+const FOLD_Y = LABEL_H / 2;
+const FACE_W = LABEL_W;
+const FACE_H = FOLD_Y;
 // 热敏打印机最外圈约 1mm 印不出来，内容不排到这个范围里
 const SAFE_EDGE = 1.2;
-// 左面：二维码在左，售价在右；二维码靠标签外沿放，与折痕拉开距离
+// 上面：二维码靠外沿放，售价在其右侧
 const QR_SIZE = 10;
-// 右面文字区
-const TEXT_W = FACE_W - MARGIN * 2;
+// 下面文字区
+const TEXT_W = FACE_W - SAFE_EDGE * 2;
 const NAME_LINE_H = 1.9;
 const FIELD_LINE_H = 1.5;
 // G530 为 300dpi（≈11.8 点/mm），画布按 12px/mm 渲染后略微缩小，边缘更锐利
@@ -154,8 +152,7 @@ function fieldValues(item: LabelItem): { text: string; wrap?: boolean }[] {
 
 /**
  * 将单张标签渲染到 canvas（使用浏览器字体，支持中文，避免 PDF 内置字体乱码）。
- * 两个可见面的内容各自逆时针旋转 90°，文字沿标签长边排布。
- * 左面：二维码 + 售价；右面：产品名称与规格字段。返回 PNG DataURL。
+ * 上面：二维码 + 售价；下面：产品名称与规格字段。返回 PNG DataURL。
  */
 async function renderLabelImage(
   qrDataUrl: string,
@@ -173,11 +170,10 @@ async function renderLabelImage(
   ctx.textBaseline = "top";
   ctx.fillStyle = "#000";
 
-  /** 把绘制坐标系切到指定面并旋转 90°，局部坐标为 25mm(x) × 15mm(y) */
+  /** 把绘制原点切到指定面的左上角，局部坐标为 25mm(x) × 15mm(y) */
   const inFace = (face: 0 | 1, draw: () => void) => {
     ctx.save();
-    ctx.translate(face * FOLD_X * PX_PER_MM, LABEL_H * PX_PER_MM);
-    ctx.rotate(-Math.PI / 2);
+    ctx.translate(0, face * FOLD_Y * PX_PER_MM);
     draw();
     ctx.restore();
   };
@@ -210,11 +206,11 @@ async function renderLabelImage(
   });
 
   inFace(1, () => {
-    const textX = MARGIN * PX_PER_MM;
+    const textX = SAFE_EDGE * PX_PER_MM;
     const textW = TEXT_W * PX_PER_MM;
     ctx.textAlign = "left";
 
-    let y = 0.7;
+    let y = SAFE_EDGE;
     ctx.font = "700 15px 'Microsoft YaHei', sans-serif";
     wrapText(ctx, item.name, textW, 2).forEach((ln) => {
       ctx.fillText(ln, textX, y * PX_PER_MM);
@@ -247,11 +243,11 @@ export async function saveLabelsPdf(items: LabelItem[]): Promise<void> {
 
   const origin = window.location.origin;
   const format: [number, number] = [LABEL_W, LABEL_H];
-  const doc = new jsPDF({ unit: "mm", format, orientation: "landscape" });
+  const doc = new jsPDF({ unit: "mm", format, orientation: "portrait" });
 
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
-    if (i > 0) doc.addPage(format, "landscape");
+    if (i > 0) doc.addPage(format, "portrait");
 
     const qr = await QRCode.toDataURL(buildQrPayload(item, origin), {
       // 静区交给标签上的 1mm 白边，此处不再额外留，以保证模块尽量大
