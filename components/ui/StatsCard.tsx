@@ -25,6 +25,11 @@ export function StatsCard({
   hint,
   accent = "amber",
 }: StatsCardProps) {
+  const text = String(value);
+  // 金额位数多时自动降一档字号，避免在窄卡片里被截断
+  const valueSize =
+    text.length > 13 ? "text-lg" : text.length > 10 ? "text-xl" : "text-2xl";
+
   return (
     <Card>
       <CardContent className="flex items-center gap-4 p-5">
@@ -40,7 +45,12 @@ export function StatsCard({
         )}
         <div className="min-w-0">
           <p className="text-sm text-gray-500">{title}</p>
-          <p className="truncate text-2xl font-bold text-gray-900">{value}</p>
+          <p
+            className={cn("break-words font-bold text-gray-900", valueSize)}
+            title={text}
+          >
+            {value}
+          </p>
           {hint && <p className="text-xs text-gray-400">{hint}</p>}
         </div>
       </CardContent>
