@@ -118,24 +118,12 @@ export default async function DashboardPage() {
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-gray-900">仪表盘</h1>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <StatsCard
           title="在库产品"
           value={inStock}
           icon={Package}
           accent="green"
-        />
-        <StatsCard
-          title="本月销售额"
-          value={formatCurrency(monthRevenue)}
-          icon={TrendingUp}
-          accent="amber"
-        />
-        <StatsCard
-          title="本月利润"
-          value={formatCurrency(monthProfit)}
-          icon={Wallet}
-          accent="blue"
         />
         <StatsCard
           title="未结款总额"
@@ -148,6 +136,21 @@ export default async function DashboardPage() {
           value={consignment}
           icon={HandCoins}
           accent="gray"
+        />
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <StatsCard
+          title="本月销售额"
+          value={formatCurrency(monthRevenue)}
+          icon={TrendingUp}
+          accent="amber"
+        />
+        <StatsCard
+          title="本月利润"
+          value={formatCurrency(monthProfit)}
+          icon={Wallet}
+          accent="blue"
         />
       </div>
 
