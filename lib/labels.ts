@@ -70,12 +70,14 @@ const FACE_H = FOLD_Y;
 // 热敏打印机最外圈约 1mm 印不出来，内容不排到这个范围里
 const SAFE_EDGE = 1.2;
 // 上面：二维码靠外沿放，售价在其右侧
-const QR_SIZE = 11;
+const QR_SIZE = 11.5;
 // 下面文字区；折痕附近容易压不实，内容额外往下让一段
-const FOLD_GAP = 2.2;
+const FOLD_GAP = 2;
 const TEXT_W = FACE_W - SAFE_EDGE * 2;
-const NAME_LINE_H = 2.4;
-const FIELD_LINE_H = 1.84;
+const NAME_LINE_H = 2.35;
+const FIELD_LINE_H = 1.92;
+// 正文底部下界（比外沿安全边略宽松，最后一行字形不会顶到边）
+const TEXT_BOTTOM = FACE_H - 1;
 // G530 为 300dpi（≈11.8 点/mm），画布按 12px/mm 渲染后略微缩小，边缘更锐利
 const PX_PER_MM = 12;
 
@@ -198,7 +200,7 @@ async function renderLabelImage(
     const price = Number(item.price || 0);
     if (price > 0) {
       ctx.textAlign = "left";
-      ctx.font = "700 24px 'Microsoft YaHei', sans-serif";
+      ctx.font = "700 26px 'Microsoft YaHei', sans-serif";
       const priceX = SAFE_EDGE + QR_SIZE + 1.2;
       ctx.fillText(
         truncate(
@@ -218,20 +220,20 @@ async function renderLabelImage(
     ctx.textAlign = "left";
 
     let y = FOLD_GAP;
-    ctx.font = "700 22px 'Microsoft YaHei', sans-serif";
+    ctx.font = "700 23px 'Microsoft YaHei', sans-serif";
     wrapText(ctx, item.name, textW, 2).forEach((ln) => {
       ctx.fillText(ln, textX, y * PX_PER_MM);
       y += NAME_LINE_H;
     });
 
-    y += 0.1;
-    ctx.font = "600 18px 'Microsoft YaHei', sans-serif";
+    y += 0.05;
+    ctx.font = "600 20px 'Microsoft YaHei', sans-serif";
     for (const field of fieldValues(item)) {
       const lines = field.wrap
         ? wrapText(ctx, field.text, textW, 2)
         : [truncate(ctx, field.text, textW)];
       for (const line of lines) {
-        if (y + FIELD_LINE_H > FACE_H - SAFE_EDGE) return;
+        if (y + FIELD_LINE_H > TEXT_BOTTOM) return;
         ctx.fillText(line, textX, y * PX_PER_MM);
         y += FIELD_LINE_H;
       }
