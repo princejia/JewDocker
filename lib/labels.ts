@@ -69,12 +69,14 @@ const FOLD_X = LABEL_W / 2;
 const FACE_W = LABEL_H;
 const FACE_H = FOLD_X;
 const MARGIN = 1;
+// 热敏打印机最外圈约 1mm 印不出来，内容不排到这个范围里
+const SAFE_EDGE = 1.2;
 // 左面：二维码在左，售价在右
 const QR_SIZE = 12;
 // 右面文字区
 const TEXT_W = FACE_W - MARGIN * 2;
-const NAME_LINE_H = 2;
-const FIELD_LINE_H = 1.6;
+const NAME_LINE_H = 1.9;
+const FIELD_LINE_H = 1.5;
 // G530 为 300dpi（≈11.8 点/mm），画布按 12px/mm 渲染后略微缩小，边缘更锐利
 const PX_PER_MM = 12;
 
@@ -185,7 +187,7 @@ async function renderLabelImage(
     const qrY = (FACE_H - QR_SIZE) / 2;
     ctx.drawImage(
       qrImg,
-      MARGIN * PX_PER_MM,
+      SAFE_EDGE * PX_PER_MM,
       qrY * PX_PER_MM,
       QR_SIZE * PX_PER_MM,
       QR_SIZE * PX_PER_MM,
@@ -195,12 +197,12 @@ async function renderLabelImage(
     if (price > 0) {
       ctx.textAlign = "left";
       ctx.font = "700 20px 'Microsoft YaHei', sans-serif";
-      const priceX = MARGIN + QR_SIZE + 1.5;
+      const priceX = SAFE_EDGE + QR_SIZE + 1.5;
       ctx.fillText(
         truncate(
           ctx,
           `¥${price.toLocaleString()}`,
-          (FACE_W - priceX - MARGIN) * PX_PER_MM,
+          (FACE_W - priceX - SAFE_EDGE) * PX_PER_MM,
         ),
         priceX * PX_PER_MM,
         (FACE_H / 2 - 1) * PX_PER_MM,
@@ -213,21 +215,21 @@ async function renderLabelImage(
     const textW = TEXT_W * PX_PER_MM;
     ctx.textAlign = "left";
 
-    let y = 0.8;
+    let y = 0.7;
     ctx.font = "700 15px 'Microsoft YaHei', sans-serif";
     wrapText(ctx, item.name, textW, 2).forEach((ln) => {
       ctx.fillText(ln, textX, y * PX_PER_MM);
       y += NAME_LINE_H;
     });
 
-    y += 0.3;
+    y += 0.2;
     ctx.font = "400 12px 'Microsoft YaHei', sans-serif";
     for (const field of fieldValues(item)) {
       const lines = field.wrap
         ? wrapText(ctx, field.text, textW, 2)
         : [truncate(ctx, field.text, textW)];
       for (const line of lines) {
-        if (y + FIELD_LINE_H > FACE_H - 0.3) return;
+        if (y + FIELD_LINE_H > FACE_H - SAFE_EDGE) return;
         ctx.fillText(line, textX, y * PX_PER_MM);
         y += FIELD_LINE_H;
       }
