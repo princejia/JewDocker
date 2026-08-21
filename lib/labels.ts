@@ -74,8 +74,8 @@ const QR_SIZE = 10;
 // 下面文字区；折痕附近容易压不实，内容额外往下让一段
 const FOLD_GAP = 2.2;
 const TEXT_W = FACE_W - SAFE_EDGE * 2;
-const NAME_LINE_H = 2.1;
-const FIELD_LINE_H = 1.7;
+const NAME_LINE_H = 2.3;
+const FIELD_LINE_H = 1.75;
 // G530 为 300dpi（≈11.8 点/mm），画布按 12px/mm 渲染后略微缩小，边缘更锐利
 const PX_PER_MM = 12;
 
@@ -142,11 +142,17 @@ function fieldValues(item: LabelItem): { text: string; wrap?: boolean }[] {
   push(item.size);
   push(item.origin);
   if (item.weight) {
-    push(`${num(Number(item.weight))}${item.weightUnit || ""}`);
+    push(`克重：${num(Number(item.weight))}${item.weightUnit || ""}`);
   }
   push(item.inlaidStones, true);
-  if (item.laborPrice) push(`工费：${num(Number(item.laborPrice))}`);
-  if (item.surcharge) push(`F：${num(Number(item.surcharge))}`);
+
+  const fee = [
+    item.laborPrice ? `工费：${num(Number(item.laborPrice))}` : "",
+    item.surcharge ? `F：${num(Number(item.surcharge))}` : "",
+  ]
+    .filter(Boolean)
+    .join("  ");
+  push(fee);
 
   return fields;
 }
@@ -192,7 +198,7 @@ async function renderLabelImage(
     const price = Number(item.price || 0);
     if (price > 0) {
       ctx.textAlign = "left";
-      ctx.font = "700 22px 'Microsoft YaHei', sans-serif";
+      ctx.font = "700 24px 'Microsoft YaHei', sans-serif";
       const priceX = SAFE_EDGE + QR_SIZE + 1.5;
       ctx.fillText(
         truncate(
@@ -212,14 +218,14 @@ async function renderLabelImage(
     ctx.textAlign = "left";
 
     let y = FOLD_GAP;
-    ctx.font = "700 17px 'Microsoft YaHei', sans-serif";
+    ctx.font = "700 19px 'Microsoft YaHei', sans-serif";
     wrapText(ctx, item.name, textW, 2).forEach((ln) => {
       ctx.fillText(ln, textX, y * PX_PER_MM);
       y += NAME_LINE_H;
     });
 
-    y += 0.2;
-    ctx.font = "600 14px 'Microsoft YaHei', sans-serif";
+    y += 0.15;
+    ctx.font = "600 15px 'Microsoft YaHei', sans-serif";
     for (const field of fieldValues(item)) {
       const lines = field.wrap
         ? wrapText(ctx, field.text, textW, 2)
