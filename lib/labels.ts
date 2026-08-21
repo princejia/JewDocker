@@ -145,7 +145,7 @@ function fieldValues(item: LabelItem): { text: string; wrap?: boolean }[] {
   }
   push(item.inlaidStones, true);
   if (item.laborPrice) push(`工费：${num(Number(item.laborPrice))}`);
-  if (item.surcharge) push(`F:${num(Number(item.surcharge))}`);
+  if (item.surcharge) push(`F：${num(Number(item.surcharge))}`);
 
   return fields;
 }
