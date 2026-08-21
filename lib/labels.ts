@@ -74,8 +74,8 @@ const QR_SIZE = 11.5;
 // 下面文字区；折痕附近容易压不实，内容额外往下让一段
 const FOLD_GAP = 2;
 const TEXT_W = FACE_W - SAFE_EDGE * 2;
-const NAME_LINE_H = 2.35;
-const FIELD_LINE_H = 1.92;
+// 行高与字号的比例（中文字形约占字号的 1.2 倍高）
+const LINE_RATIO = 1.3;
 // 正文底部下界（比外沿安全边略宽松，最后一行字形不会顶到边）
 const TEXT_BOTTOM = FACE_H - 1;
 // G530 为 300dpi（≈11.8 点/mm），画布按 12px/mm 渲染后略微缩小，边缘更锐利
@@ -200,17 +200,17 @@ async function renderLabelImage(
     const price = Number(item.price || 0);
     if (price > 0) {
       ctx.textAlign = "left";
-      ctx.font = "700 26px 'Microsoft YaHei', sans-serif";
+      const text = `¥${price.toLocaleString()}`;
       const priceX = SAFE_EDGE + QR_SIZE + 1.2;
-      ctx.fillText(
-        truncate(
-          ctx,
-          `¥${price.toLocaleString()}`,
-          (FACE_W - priceX - SAFE_EDGE) * PX_PER_MM,
-        ),
-        priceX * PX_PER_MM,
-        SAFE_EDGE * PX_PER_MM,
-      );
+      const maxW = (FACE_W - priceX - SAFE_EDGE) * PX_PER_MM;
+      // 从大到小试，取能放下的最大字号
+      let px = 34;
+      for (; px > 14; px--) {
+        ctx.font = `700 ${px}px 'Microsoft YaHei', sans-serif`;
+        if (ctx.measureText(text).width <= maxW) break;
+      }
+      const priceY = SAFE_EDGE + (QR_SIZE - (px / PX_PER_MM) * 1.2) / 2;
+      ctx.fillText(text, priceX * PX_PER_MM, priceY * PX_PER_MM);
     }
   });
 
@@ -219,24 +219,47 @@ async function renderLabelImage(
     const textW = TEXT_W * PX_PER_MM;
     ctx.textAlign = "left";
 
-    let y = FOLD_GAP;
-    ctx.font = "700 23px 'Microsoft YaHei', sans-serif";
-    wrapText(ctx, item.name, textW, 2).forEach((ln) => {
-      ctx.fillText(ln, textX, y * PX_PER_MM);
-      y += NAME_LINE_H;
-    });
+    const available = TEXT_BOTTOM - FOLD_GAP;
+    const nameFont = (px: number) => `700 ${px}px 'Microsoft YaHei', sans-serif`;
+    const fieldFont = (px: number) =>
+      `600 ${px}px 'Microsoft YaHei', sans-serif`;
 
-    y += 0.05;
-    ctx.font = "600 20px 'Microsoft YaHei', sans-serif";
-    for (const field of fieldValues(item)) {
-      const lines = field.wrap
-        ? wrapText(ctx, field.text, textW, 2)
-        : [truncate(ctx, field.text, textW)];
-      for (const line of lines) {
-        if (y + FIELD_LINE_H > TEXT_BOTTOM) return;
-        ctx.fillText(line, textX, y * PX_PER_MM);
-        y += FIELD_LINE_H;
-      }
+    // 从大到小试字号，取第一个所有行都能放下的
+    let fieldPx = 26;
+    let namePx = 0;
+    let nameLines: string[] = [];
+    let valueLines: string[] = [];
+    let used = 0;
+    for (; fieldPx > 10; fieldPx--) {
+      namePx = Math.round(fieldPx * 1.15);
+      ctx.font = nameFont(namePx);
+      nameLines = wrapText(ctx, item.name, textW, 2);
+      ctx.font = fieldFont(fieldPx);
+      valueLines = fieldValues(item).flatMap((f) =>
+        f.wrap
+          ? wrapText(ctx, f.text, textW, 2)
+          : [truncate(ctx, f.text, textW)],
+      );
+      used =
+        (nameLines.length * namePx + valueLines.length * fieldPx) *
+        (LINE_RATIO / PX_PER_MM);
+      if (used <= available) break;
+    }
+
+    // 剩余空间平摊到行距，避免底部留大片空白
+    const lineCount = nameLines.length + valueLines.length;
+    const extra = lineCount ? (available - used) / lineCount : 0;
+
+    let y = FOLD_GAP;
+    ctx.font = nameFont(namePx);
+    for (const line of nameLines) {
+      ctx.fillText(line, textX, y * PX_PER_MM);
+      y += (namePx * LINE_RATIO) / PX_PER_MM + extra;
+    }
+    ctx.font = fieldFont(fieldPx);
+    for (const line of valueLines) {
+      ctx.fillText(line, textX, y * PX_PER_MM);
+      y += (fieldPx * LINE_RATIO) / PX_PER_MM + extra;
     }
   });
 
