@@ -71,8 +71,8 @@ const FACE_H = FOLD_X;
 const MARGIN = 1;
 // 热敏打印机最外圈约 1mm 印不出来，内容不排到这个范围里
 const SAFE_EDGE = 1.2;
-// 左面：二维码在左，售价在右
-const QR_SIZE = 12;
+// 左面：二维码在左，售价在右；二维码靠标签外沿放，与折痕拉开距离
+const QR_SIZE = 10;
 // 右面文字区
 const TEXT_W = FACE_W - MARGIN * 2;
 const NAME_LINE_H = 1.9;
@@ -184,11 +184,10 @@ async function renderLabelImage(
 
   const qrImg = await loadImage(qrDataUrl);
   inFace(0, () => {
-    const qrY = (FACE_H - QR_SIZE) / 2;
     ctx.drawImage(
       qrImg,
       SAFE_EDGE * PX_PER_MM,
-      qrY * PX_PER_MM,
+      SAFE_EDGE * PX_PER_MM,
       QR_SIZE * PX_PER_MM,
       QR_SIZE * PX_PER_MM,
     );
@@ -205,7 +204,7 @@ async function renderLabelImage(
           (FACE_W - priceX - SAFE_EDGE) * PX_PER_MM,
         ),
         priceX * PX_PER_MM,
-        (FACE_H / 2 - 1) * PX_PER_MM,
+        SAFE_EDGE * PX_PER_MM,
       );
     }
   });
