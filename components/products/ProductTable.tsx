@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Product } from "@/types";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { SelectionCheckbox } from "@/components/ui/SelectionCheckbox";
+import { purchaseCostOf } from "@/lib/constants";
 import { formatCurrency, formatDate, formatProductCode } from "@/lib/utils";
 import {
   Table,
@@ -121,7 +122,11 @@ export function ProductTable({
                   )}
                 </TableCell>
                 <TableCell className="text-right text-green-700">
-                  {formatCurrency(p.profit)}
+                  {p.sale_status === "sold" ? (
+                    formatCurrency(Number(p.sale_price || 0) - purchaseCostOf(p))
+                  ) : (
+                    <span className="text-gray-400">-</span>
+                  )}
                 </TableCell>
                 <TableCell className="text-gray-600">
                   {p.origin || "-"}

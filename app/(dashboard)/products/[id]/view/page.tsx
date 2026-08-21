@@ -6,7 +6,7 @@ import { Product } from "@/types";
 import { Gallery } from "@/app/v/[type]/[id]/Gallery";
 import { BackButton } from "@/components/products/BackButton";
 import { StatusBadge } from "@/components/ui/StatusBadge";
-import { categoryLabel, isGoldCategory } from "@/lib/constants";
+import { categoryLabel, isGoldCategory, purchaseCostOf } from "@/lib/constants";
 import { formatCurrency, formatDate, formatProductCode } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -35,7 +35,7 @@ export default async function ProductViewPage({
     Number(product.surcharge || 0) * Number(product.purchase_discount || 0);
   const goldPriceCost =
     Number(product.total_weight || 0) * Number(product.purchase_price || 0);
-  const totalPurchaseCost = laborSubtotal + surchargeSubtotal + goldPriceCost;
+  const purchaseCost = purchaseCostOf(product);
 
   const fields: Field[] = [
     {
@@ -54,7 +54,13 @@ export default async function ProductViewPage({
     { label: "价格", value: formatCurrency(product.price) },
     { label: "进货价", value: formatCurrency(product.purchase_price) },
     { label: "出售价", value: formatCurrency(product.sale_price) },
-    { label: "利润", value: formatCurrency(product.profit) },
+    {
+      label: "利润",
+      value:
+        product.sale_status === "sold"
+          ? formatCurrency(Number(product.sale_price || 0) - purchaseCost)
+          : null,
+    },
     ...(isGold
       ? [
           {
@@ -88,7 +94,7 @@ export default async function ProductViewPage({
           { label: "工费小计", value: formatCurrency(laborSubtotal) },
           { label: "附加费小计", value: formatCurrency(surchargeSubtotal) },
           { label: "进货金价成本", value: formatCurrency(goldPriceCost) },
-          { label: "进货总成本", value: formatCurrency(totalPurchaseCost) },
+          { label: "进货总成本", value: formatCurrency(purchaseCost) },
         ]
       : []),
     { label: "购入时间", value: formatDate(product.purchased_at) },

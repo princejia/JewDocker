@@ -1,5 +1,5 @@
 import { Product, LooseStone } from "@/types";
-import { categoryLabel } from "@/lib/constants";
+import { categoryLabel, purchaseCostOf } from "@/lib/constants";
 import { formatProductCode } from "@/lib/utils";
 
 const STATUS_LABEL: Record<string, string> = {
@@ -93,6 +93,7 @@ export async function exportProductsToExcel(
     { header: "销售状态", key: "status", width: 10 },
     { header: "价格(¥)", key: "price", width: 12 },
     { header: "进货价(¥)", key: "purchase_price", width: 12 },
+    { header: "进货成本(¥)", key: "purchase_cost", width: 14 },
     { header: "利润(¥)", key: "profit", width: 12 },
     { header: "结款(¥)", key: "settled", width: 12 },
     { header: "未结款(¥)", key: "unsettled", width: 12 },
@@ -131,7 +132,11 @@ export async function exportProductsToExcel(
       status: STATUS_LABEL[p.sale_status] ?? p.sale_status,
       price: Number(p.price),
       purchase_price: Number(p.purchase_price),
-      profit: Number(p.profit),
+      purchase_cost: purchaseCostOf(p),
+      profit:
+        p.sale_status === "sold"
+          ? Number(p.sale_price ?? 0) - purchaseCostOf(p)
+          : "",
       settled: Number(p.settled_amount),
       unsettled: Number(p.unsettled_amount),
       sale_price: Number(p.sale_price ?? 0),
