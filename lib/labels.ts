@@ -179,16 +179,23 @@ async function renderLabelImage(
   ctx.textBaseline = "top";
   ctx.fillStyle = "#000";
 
-  /** 把绘制原点切到指定面的左上角，局部坐标为 25mm(x) × 15mm(y) */
-  const inFace = (face: 0 | 1, draw: () => void) => {
+  /**
+   * 把绘制原点切到指定面的左上角，局部坐标为 25mm(x) × 15mm(y)。
+   * flip 时内容在本面内旋转 180°，对折后两面方向一致。
+   */
+  const inFace = (face: 0 | 1, flip: boolean, draw: () => void) => {
     ctx.save();
     ctx.translate(0, face * FOLD_Y * PX_PER_MM);
+    if (flip) {
+      ctx.translate(FACE_W * PX_PER_MM, FACE_H * PX_PER_MM);
+      ctx.rotate(Math.PI);
+    }
     draw();
     ctx.restore();
   };
 
   const qrImg = await loadImage(qrDataUrl);
-  inFace(0, () => {
+  inFace(0, true, () => {
     ctx.drawImage(
       qrImg,
       SAFE_EDGE * PX_PER_MM,
@@ -214,7 +221,7 @@ async function renderLabelImage(
     }
   });
 
-  inFace(1, () => {
+  inFace(1, false, () => {
     const textX = SAFE_EDGE * PX_PER_MM;
     const textW = TEXT_W * PX_PER_MM;
     ctx.textAlign = "left";
