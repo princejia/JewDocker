@@ -90,6 +90,7 @@ export async function exportProductsToExcel(
     { header: "图片", key: "image", width: 14 },
     { header: "编号", key: "code", width: 20 },
     { header: "产品名称", key: "name", width: 20 },
+    { header: "供应商", key: "supplier", width: 16 },
     { header: "销售状态", key: "status", width: 10 },
     { header: "价格(¥)", key: "price", width: 12 },
     { header: "进货价(¥)", key: "purchase_price", width: 12 },
@@ -129,6 +130,7 @@ export async function exportProductsToExcel(
     const row = ws.addRow({
       code: p.code ?? formatProductCode("P", p.created_at),
       name: p.name,
+      supplier: p.supplier ?? "",
       status: STATUS_LABEL[p.sale_status] ?? p.sale_status,
       price: Number(p.price),
       purchase_price: Number(p.purchase_price),
