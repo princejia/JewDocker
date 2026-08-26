@@ -25,6 +25,8 @@ export type ShowcaseItem = {
   name: string;
   category: string | null;
   images: string[];
+  price: number;
+  fields: { label: string; value: string }[];
 };
 
 type Tab = "all" | "product" | "stone";
@@ -419,7 +421,7 @@ export function CFShowcaseClient({
             </button>
 
             <div
-              className="relative flex-1 bg-black"
+              className="relative min-h-0 flex-1 bg-black"
               onTouchStart={onTouchStart}
               onTouchEnd={onTouchEnd}
             >
@@ -467,9 +469,26 @@ export function CFShowcaseClient({
               )}
             </div>
 
-            <div className="border-t border-zinc-800 bg-zinc-950 p-4 text-white">
+            <div className="max-h-[50%] shrink-0 overflow-y-auto border-t border-zinc-800 bg-zinc-950 p-4 text-white">
               <p className="font-mono text-xs text-zinc-400">{activeItem.code}</p>
               <p className="mt-1 text-base">{activeItem.name}</p>
+
+              {activeItem.price > 0 && (
+                <p className="mt-2 text-2xl font-semibold text-[var(--sc-accent)]">
+                  ¥{activeItem.price.toLocaleString()}
+                </p>
+              )}
+
+              {activeItem.fields.length > 0 && (
+                <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3">
+                  {activeItem.fields.map((f) => (
+                    <div key={f.label}>
+                      <dt className="text-xs text-zinc-500">{f.label}</dt>
+                      <dd className="mt-0.5 text-sm text-zinc-100">{f.value}</dd>
+                    </div>
+                  ))}
+                </dl>
+              )}
 
               {activeItem.images.length > 1 && (
                 <div className="mt-4 flex items-center gap-2 overflow-x-auto pb-1">

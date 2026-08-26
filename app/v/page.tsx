@@ -1,7 +1,13 @@
 import type { Metadata } from "next";
 import { BeianFooter } from "@/components/layout/BeianFooter";
 import { createServerClient } from "@/lib/supabase-server";
-import { formatProductCode } from "@/lib/utils";
+import {
+  PUBLIC_PRODUCT_COLUMNS,
+  PUBLIC_STONE_COLUMNS,
+  productPublicView,
+  stonePublicView,
+  toImageArray,
+} from "@/lib/public-view";
 import type { LooseStone, Product } from "@/types";
 import { CFShowcaseClient, type ShowcaseItem } from "./CFShowcaseClient";
 
@@ -13,13 +19,6 @@ const SITE_DESCRIPTION =
 
 // 展示全部目录（含已售），上限仅作为公开页面的兜底保护
 const MAX_ITEMS_PER_TYPE = 500;
-
-function toStringArray(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-  return value.filter(
-    (item): item is string => typeof item === "string" && item.length > 0
-  );
-}
 
 export async function generateMetadata(): Promise<Metadata> {
   let cover: string | undefined;
@@ -34,7 +33,7 @@ export async function generateMetadata(): Promise<Metadata> {
 
     cover = (data ?? [])
       .flatMap((row) =>
-        toStringArray((row as { image_urls: unknown }).image_urls)
+        toImageArray((row as { image_urls: unknown }).image_urls)
       )
       .find((url) => url.startsWith("http"));
   } catch {
@@ -66,14 +65,12 @@ export default async function CFPublicShowcasePage() {
   const [productRes, stoneRes] = await Promise.all([
     supabase
       .from("products")
-      .select(
-        "id, code, name, image_urls, gemstone_category, function_category, created_at"
-      )
+      .select(PUBLIC_PRODUCT_COLUMNS)
       .order("created_at", { ascending: false })
       .limit(MAX_ITEMS_PER_TYPE),
     supabase
       .from("loose_stones")
-      .select("id, code, material, image_urls, gemstone_category, created_at")
+      .select(PUBLIC_STONE_COLUMNS)
       .order("created_at", { ascending: false })
       .limit(MAX_ITEMS_PER_TYPE),
   ]);
@@ -84,43 +81,36 @@ export default async function CFPublicShowcasePage() {
     );
   }
 
-  const productRows = (productRes.data ?? []) as Pick<
-    Product,
-    | "id"
-    | "code"
-    | "name"
-    | "image_urls"
-    | "gemstone_category"
-    | "function_category"
-    | "created_at"
-  >[];
-  const stoneRows = (stoneRes.data ?? []) as Pick<
-    LooseStone,
-    | "id"
-    | "code"
-    | "material"
-    | "image_urls"
-    | "gemstone_category"
-    | "created_at"
-  >[];
+  const productRows = (productRes.data ?? []) as unknown as Product[];
+  const stoneRows = (stoneRes.data ?? []) as unknown as LooseStone[];
 
-  const products: ShowcaseItem[] = productRows.map((item) => ({
-    id: item.id,
-    type: "product",
-    code: item.code ?? formatProductCode("P", item.created_at),
-    name: item.name,
-    category: item.gemstone_category || item.function_category || null,
-    images: toStringArray(item.image_urls),
-  }));
+  const products: ShowcaseItem[] = productRows.map((item) => {
+    const view = productPublicView(item);
+    return {
+      id: item.id,
+      type: "product",
+      code: view.code,
+      name: view.title,
+      category: item.gemstone_category || item.function_category || null,
+      images: view.images,
+      price: view.price,
+      fields: view.fields,
+    };
+  });
 
-  const stones: ShowcaseItem[] = stoneRows.map((item) => ({
-    id: item.id,
-    type: "stone",
-    code: item.code ?? formatProductCode("L", item.created_at),
-    name: item.material || "未命名裸石",
-    category: item.gemstone_category || item.material || null,
-    images: toStringArray(item.image_urls),
-  }));
+  const stones: ShowcaseItem[] = stoneRows.map((item) => {
+    const view = stonePublicView(item);
+    return {
+      id: item.id,
+      type: "stone",
+      code: view.code,
+      name: view.title,
+      category: item.gemstone_category || item.material || null,
+      images: view.images,
+      price: view.price,
+      fields: view.fields,
+    };
+  });
 
   return (
     <>

@@ -2,8 +2,12 @@ import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { createServerClient } from "@/lib/supabase-server";
 import { getCurrentSession } from "@/lib/users";
-import { categoryLabel } from "@/lib/constants";
-import { formatProductCode } from "@/lib/utils";
+import {
+  PUBLIC_PRODUCT_COLUMNS,
+  PUBLIC_STONE_COLUMNS,
+  productPublicView,
+  stonePublicView,
+} from "@/lib/public-view";
 import { Product, LooseStone } from "@/types";
 import { Gallery } from "./Gallery";
 
@@ -13,14 +17,6 @@ export const metadata: Metadata = {
   title: "C&F珠宝展示",
   description: "C&F Jewelry item detail",
 };
-
-// 只取标签上已经印出来的信息，成本价、进货价等一律不读进这个公开页面
-const PRODUCT_COLUMNS =
-  "id, code, name, image_urls, price, total_weight, weight_unit, size, origin, gemstone_category, function_category, inlaid_stones, labor_sale_price, surcharge, created_at";
-const STONE_COLUMNS =
-  "id, code, material, image_urls, price, weight, weight_unit, size, origin, gemstone_category, certificate, created_at";
-
-type Field = { label: string; value: string | null | undefined };
 
 export default async function PublicViewPage({
   params,
@@ -36,10 +32,10 @@ export default async function PublicViewPage({
     redirect(type === "p" ? `/products/${id}` : `/loose-stones?edit=${id}`);
   }
 
-  // 未登录：展示清新页面（不含价格）
+  // 未登录：展示清新页面（口径与实体标签一致）
   const supabase = createServerClient();
   const table = type === "p" ? "products" : "loose_stones";
-  const columns = type === "p" ? PRODUCT_COLUMNS : STONE_COLUMNS;
+  const columns = type === "p" ? PUBLIC_PRODUCT_COLUMNS : PUBLIC_STONE_COLUMNS;
   const { data } = await supabase
     .from(table)
     .select(columns)
@@ -47,44 +43,10 @@ export default async function PublicViewPage({
     .single();
   if (!data) notFound();
 
-  let title: string;
-  let code: string;
-  let images: string[];
-  let fields: Field[];
-  let price: number;
-
-  if (type === "p") {
-    const p = data as unknown as Product;
-    title = p.name;
-    code = p.code ?? formatProductCode("P", p.created_at);
-    images = p.image_urls ?? [];
-    price = Number(p.price || 0);
-    fields = [
-      { label: "重量", value: p.total_weight != null ? `${p.total_weight}${p.weight_unit || "g"}` : null },
-      { label: "尺寸", value: p.size },
-      { label: "产地", value: p.origin },
-      { label: "宝石分类", value: categoryLabel(p.gemstone_category) },
-      { label: "功能分类", value: categoryLabel(p.function_category) },
-      { label: "镶嵌配石", value: p.inlaid_stones },
-      { label: "工费", value: p.labor_sale_price ? `¥${p.labor_sale_price}/g` : null },
-      { label: "附加费", value: p.surcharge ? `¥${p.surcharge}/g` : null },
-    ];
-  } else {
-    const s = data as unknown as LooseStone;
-    title = s.material || "未命名裸石";
-    code = s.code ?? formatProductCode("L", s.created_at);
-    images = s.image_urls ?? [];
-    price = Number(s.price || 0);
-    fields = [
-      { label: "重量", value: s.weight != null ? `${s.weight}${s.weight_unit || "g"}` : null },
-      { label: "尺寸", value: s.size },
-      { label: "产地", value: s.origin },
-      { label: "宝石分类", value: categoryLabel(s.gemstone_category) },
-      { label: "证书", value: s.certificate },
-    ];
-  }
-
-  const visible = fields.filter((f) => f.value);
+  const { title, code, images, price, fields } =
+    type === "p"
+      ? productPublicView(data as unknown as Product)
+      : stonePublicView(data as unknown as LooseStone);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-amber-50 via-white to-rose-50">
@@ -104,9 +66,9 @@ export default async function PublicViewPage({
               </p>
             )}
 
-            {visible.length > 0 && (
+            {fields.length > 0 && (
               <dl className="mt-6 grid grid-cols-2 gap-4">
-                {visible.map((f) => (
+                {fields.map((f) => (
                   <div key={f.label}>
                     <dt className="text-xs text-gray-400">{f.label}</dt>
                     <dd className="mt-0.5 text-sm font-medium text-gray-800">
