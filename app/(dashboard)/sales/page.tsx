@@ -32,8 +32,11 @@ export default async function SalesPage() {
 
   const { data: returnsData } = await supabase
     .from("product_returns")
-    .select("refund_amount");
-  const returns = (returnsData ?? []) as Pick<ProductReturn, "refund_amount">[];
+    .select("refund_amount, returned_at");
+  const returns = (returnsData ?? []) as Pick<
+    ProductReturn,
+    "refund_amount" | "returned_at"
+  >[];
   const totalRefund = returns.reduce(
     (s, r) => s + Number(r.refund_amount || 0),
     0,
@@ -42,6 +45,36 @@ export default async function SalesPage() {
   const grossRevenue = sales.reduce((s, r) => s + Number(r.sale_price || 0), 0);
   const totalRevenue = grossRevenue - totalRefund;
   const avgPrice = sales.length ? grossRevenue / sales.length : 0;
+
+  // 按月统计：销售按成交日期归属，退款按退货日期归属
+  const monthly = new Map<
+    string,
+    { month: string; count: number; gross: number; refund: number }
+  >();
+  const bucket = (date: string | null | undefined) => {
+    const month = (date ?? "").slice(0, 7);
+    if (!month) return null;
+    let row = monthly.get(month);
+    if (!row) {
+      row = { month, count: 0, gross: 0, refund: 0 };
+      monthly.set(month, row);
+    }
+    return row;
+  };
+  for (const s of sales) {
+    const row = bucket(s.sold_at);
+    if (!row) continue;
+    row.count += 1;
+    row.gross += Number(s.sale_price || 0);
+  }
+  for (const r of returns) {
+    const row = bucket(r.returned_at);
+    if (!row) continue;
+    row.refund += Number(r.refund_amount || 0);
+  }
+  const monthlyRows = [...monthly.values()].sort((a, b) =>
+    b.month.localeCompare(a.month),
+  );
 
   return (
     <div className="space-y-6">
@@ -62,6 +95,7 @@ export default async function SalesPage() {
           value={formatCurrency(totalRevenue)}
           icon={TrendingUp}
           accent="green"
+          hint="全部历史累计，已扣除退款"
         />
         <StatsCard
           title="平均客单价"
@@ -69,6 +103,52 @@ export default async function SalesPage() {
           icon={Users}
           accent="blue"
         />
+      </div>
+
+      <div className="rounded-xl border bg-white">
+        <div className="border-b px-4 py-3">
+          <h2 className="text-base font-semibold text-gray-900">按月统计</h2>
+        </div>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>月份</TableHead>
+              <TableHead className="text-right">成交笔数</TableHead>
+              <TableHead className="text-right">销售额</TableHead>
+              <TableHead className="text-right">退款</TableHead>
+              <TableHead className="text-right">净销售额</TableHead>
+              <TableHead className="text-right">平均客单价</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {monthlyRows.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={6} className="text-center text-gray-400">
+                  暂无数据
+                </TableCell>
+              </TableRow>
+            ) : (
+              monthlyRows.map((m) => (
+                <TableRow key={m.month}>
+                  <TableCell className="font-medium">{m.month}</TableCell>
+                  <TableCell className="text-right">{m.count}</TableCell>
+                  <TableCell className="text-right">
+                    {formatCurrency(m.gross)}
+                  </TableCell>
+                  <TableCell className="text-right text-red-500">
+                    {m.refund ? `-${formatCurrency(m.refund)}` : "-"}
+                  </TableCell>
+                  <TableCell className="text-right font-medium text-amber-700">
+                    {formatCurrency(m.gross - m.refund)}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {m.count ? formatCurrency(m.gross / m.count) : "-"}
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
       </div>
 
       <div className="space-y-3 md:hidden">

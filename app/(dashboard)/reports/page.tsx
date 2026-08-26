@@ -1,5 +1,5 @@
 import { createServerClient } from "@/lib/supabase-server";
-import { LooseStone, Product } from "@/types";
+import { LooseStone, Product, ProductReturn } from "@/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatsCard } from "@/components/ui/StatsCard";
 import { ProfitChart, ProfitDatum } from "@/components/reports/ProfitChart";
@@ -52,6 +52,21 @@ export default async function ReportsPage() {
       ? purchaseCostOf(s.products)
       : Number(s.loose_stones?.purchase_price || 0);
 
+  // 退货：按退货日期同时抵减销售额与利润（与仪表盘、销售页口径一致）
+  const { data: returnsData } = await supabase
+    .from("product_returns")
+    .select("refund_amount, returned_at");
+  const returns = (returnsData ?? []) as Pick<
+    ProductReturn,
+    "refund_amount" | "returned_at"
+  >[];
+  const refundByDay = new Map<string, number>();
+  for (const r of returns) {
+    const d = r.returned_at ?? "";
+    if (!d) continue;
+    refundByDay.set(d, (refundByDay.get(d) ?? 0) + Number(r.refund_amount || 0));
+  }
+
   // 库存成本
   const inStock = list.filter((p) => p.sale_status === "in_stock");
   const inventoryCost = inStock.reduce((s, p) => s + purchaseCostOf(p), 0);
@@ -61,13 +76,17 @@ export default async function ReportsPage() {
   for (let i = 29; i >= 0; i--) {
     const d = new Date(Date.now() - i * 86400000).toISOString().slice(0, 10);
     const daySales = sales.filter((s) => s.sold_at === d);
+    const dayRefund = refundByDay.get(d) ?? 0;
     days.push({
       date: d.slice(5),
-      revenue: daySales.reduce((sum, s) => sum + Number(s.sale_price || 0), 0),
-      profit: daySales.reduce(
-        (sum, s) => sum + (Number(s.sale_price || 0) - saleCost(s)),
-        0
-      ),
+      revenue:
+        daySales.reduce((sum, s) => sum + Number(s.sale_price || 0), 0) -
+        dayRefund,
+      profit:
+        daySales.reduce(
+          (sum, s) => sum + (Number(s.sale_price || 0) - saleCost(s)),
+          0
+        ) - dayRefund,
     });
   }
 
@@ -87,6 +106,43 @@ export default async function ReportsPage() {
       profit: salePrice - cost,
     };
   });
+
+  // 按月汇总（销售按成交日期归属，退款按退货日期归属）
+  const monthly = new Map<
+    string,
+    {
+      month: string;
+      count: number;
+      revenue: number;
+      cost: number;
+      refund: number;
+    }
+  >();
+  const monthBucket = (date: string | null | undefined) => {
+    const month = (date ?? "").slice(0, 7);
+    if (!month) return null;
+    let row = monthly.get(month);
+    if (!row) {
+      row = { month, count: 0, revenue: 0, cost: 0, refund: 0 };
+      monthly.set(month, row);
+    }
+    return row;
+  };
+  for (const r of profitRows) {
+    const row = monthBucket(r.sold_at);
+    if (!row) continue;
+    row.count += 1;
+    row.revenue += r.sale_price;
+    row.cost += r.cost;
+  }
+  for (const r of returns) {
+    const row = monthBucket(r.returned_at);
+    if (!row) continue;
+    row.refund += Number(r.refund_amount || 0);
+  }
+  const monthlyRows = [...monthly.values()].sort((a, b) =>
+    b.month.localeCompare(a.month)
+  );
 
   // 未结款汇总（仅借售，在库/已售不计入未结款）
   const unsettledList = list
@@ -185,6 +241,70 @@ export default async function ReportsPage() {
         </CardHeader>
         <CardContent>
           <ProfitChart data={days} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">按月汇总</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>月份</TableHead>
+                <TableHead className="text-right">成交笔数</TableHead>
+                <TableHead className="text-right">销售额</TableHead>
+                <TableHead className="text-right">退款</TableHead>
+                <TableHead className="text-right">净销售额</TableHead>
+                <TableHead className="text-right">成本</TableHead>
+                <TableHead className="text-right">利润</TableHead>
+                <TableHead className="text-right">利润率</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {monthlyRows.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={8} className="text-center text-gray-400">
+                    暂无数据
+                  </TableCell>
+                </TableRow>
+              ) : (
+                monthlyRows.map((m) => {
+                  const net = m.revenue - m.refund;
+                  const profit = m.revenue - m.cost - m.refund;
+                  return (
+                    <TableRow key={m.month}>
+                      <TableCell className="font-medium">{m.month}</TableCell>
+                      <TableCell className="text-right">{m.count}</TableCell>
+                      <TableCell className="text-right">
+                        {formatCurrency(m.revenue)}
+                      </TableCell>
+                      <TableCell className="text-right text-red-500">
+                        {m.refund ? `-${formatCurrency(m.refund)}` : "-"}
+                      </TableCell>
+                      <TableCell className="text-right text-amber-700">
+                        {formatCurrency(net)}
+                      </TableCell>
+                      <TableCell className="text-right text-gray-600">
+                        {formatCurrency(m.cost)}
+                      </TableCell>
+                      <TableCell
+                        className={`text-right font-medium ${
+                          profit >= 0 ? "text-green-700" : "text-red-500"
+                        }`}
+                      >
+                        {formatCurrency(profit)}
+                      </TableCell>
+                      <TableCell className="text-right text-gray-600">
+                        {net ? `${((profit / net) * 100).toFixed(1)}%` : "-"}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
+              )}
+            </TableBody>
+          </Table>
         </CardContent>
       </Card>
 
