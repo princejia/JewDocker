@@ -19,15 +19,39 @@ import { ReturnsManager } from "@/components/sales/ReturnsManager";
 
 export const dynamic = "force-dynamic";
 
-export default async function SalesPage() {
+const PAGE_SIZE = 20;
+
+export default async function SalesPage({
+  searchParams,
+}: {
+  searchParams?: { page?: string };
+}) {
   const supabase = createServerClient();
+
+  // 统计与按月汇总需要全量数据，不能只算当前页；总数也复用它，省一次 count 查询
+  const { data: allSalesData } = await supabase
+    .from("product_sales")
+    .select("sale_price, sold_at");
+  const allSales = (allSalesData ?? []) as {
+    sale_price: number;
+    sold_at: string;
+  }[];
+
+  const total = allSales.length;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const page = Math.min(
+    totalPages,
+    Math.max(1, Number(searchParams?.page || 1) || 1),
+  );
+
   const { data } = await supabase
     .from("product_sales")
     .select(
       "*, products(id, name, image_urls, sale_status), customers(id, name), loose_stones(id, material, image_urls, sale_status)",
     )
     .order("sold_at", { ascending: false })
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1);
 
   const sales = (data ?? []) as ProductSaleWithRelations[];
 
@@ -43,9 +67,12 @@ export default async function SalesPage() {
     0,
   );
 
-  const grossRevenue = sales.reduce((s, r) => s + Number(r.sale_price || 0), 0);
+  const grossRevenue = allSales.reduce(
+    (s, r) => s + Number(r.sale_price || 0),
+    0,
+  );
   const totalRevenue = grossRevenue - totalRefund;
-  const avgPrice = sales.length ? grossRevenue / sales.length : 0;
+  const avgPrice = allSales.length ? grossRevenue / allSales.length : 0;
 
   // 按月统计：销售按成交日期归属，退款按退货日期归属
   const monthly = new Map<
@@ -62,7 +89,7 @@ export default async function SalesPage() {
     }
     return row;
   };
-  for (const s of sales) {
+  for (const s of allSales) {
     const row = bucket(s.sold_at);
     if (!row) continue;
     row.count += 1;
@@ -87,7 +114,7 @@ export default async function SalesPage() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <StatsCard
           title="总成交笔数"
-          value={sales.length}
+          value={total}
           icon={Receipt}
           accent="amber"
         />
@@ -298,6 +325,40 @@ export default async function SalesPage() {
           </TableBody>
         </Table>
       </div>
+
+      {totalPages > 1 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-white px-4 py-3 text-sm">
+          <span className="text-gray-500">
+            共 {total} 条 · 第 {page} / {totalPages} 页
+          </span>
+          <div className="flex items-center gap-2">
+            {page > 1 ? (
+              <Link
+                href={`/sales?page=${page - 1}`}
+                className="rounded-lg border px-3 py-1.5 text-gray-700 hover:bg-gray-50"
+              >
+                上一页
+              </Link>
+            ) : (
+              <span className="rounded-lg border px-3 py-1.5 text-gray-300">
+                上一页
+              </span>
+            )}
+            {page < totalPages ? (
+              <Link
+                href={`/sales?page=${page + 1}`}
+                className="rounded-lg border px-3 py-1.5 text-gray-700 hover:bg-gray-50"
+              >
+                下一页
+              </Link>
+            ) : (
+              <span className="rounded-lg border px-3 py-1.5 text-gray-300">
+                下一页
+              </span>
+            )}
+          </div>
+        </div>
+      )}
 
       <ReturnsManager />
     </div>
