@@ -14,11 +14,11 @@ export const metadata: Metadata = {
   description: "C&F Jewelry item detail",
 };
 
-// 仅取展示所需列，避免把成本价 / 售价读进这个公开页面
+// 只取标签上已经印出来的信息，成本价、进货价等一律不读进这个公开页面
 const PRODUCT_COLUMNS =
-  "id, code, name, image_urls, total_weight, weight_unit, size, origin, gemstone_category, function_category, inlaid_stones, created_at";
+  "id, code, name, image_urls, price, total_weight, weight_unit, size, origin, gemstone_category, function_category, inlaid_stones, labor_sale_price, surcharge, created_at";
 const STONE_COLUMNS =
-  "id, code, material, image_urls, weight, weight_unit, size, origin, gemstone_category, certificate, created_at";
+  "id, code, material, image_urls, price, weight, weight_unit, size, origin, gemstone_category, certificate, created_at";
 
 type Field = { label: string; value: string | null | undefined };
 
@@ -51,12 +51,14 @@ export default async function PublicViewPage({
   let code: string;
   let images: string[];
   let fields: Field[];
+  let price: number;
 
   if (type === "p") {
     const p = data as unknown as Product;
     title = p.name;
     code = p.code ?? formatProductCode("P", p.created_at);
     images = p.image_urls ?? [];
+    price = Number(p.price || 0);
     fields = [
       { label: "重量", value: p.total_weight != null ? `${p.total_weight}${p.weight_unit || "g"}` : null },
       { label: "尺寸", value: p.size },
@@ -64,12 +66,15 @@ export default async function PublicViewPage({
       { label: "宝石分类", value: categoryLabel(p.gemstone_category) },
       { label: "功能分类", value: categoryLabel(p.function_category) },
       { label: "镶嵌配石", value: p.inlaid_stones },
+      { label: "工费", value: p.labor_sale_price ? `¥${p.labor_sale_price}/g` : null },
+      { label: "附加费", value: p.surcharge ? `¥${p.surcharge}/g` : null },
     ];
   } else {
     const s = data as unknown as LooseStone;
     title = s.material || "未命名裸石";
     code = s.code ?? formatProductCode("L", s.created_at);
     images = s.image_urls ?? [];
+    price = Number(s.price || 0);
     fields = [
       { label: "重量", value: s.weight != null ? `${s.weight}${s.weight_unit || "g"}` : null },
       { label: "尺寸", value: s.size },
@@ -92,6 +97,12 @@ export default async function PublicViewPage({
             <p className="mt-1 font-mono text-xs tracking-wide text-amber-600">
               {code}
             </p>
+
+            {price > 0 && (
+              <p className="mt-4 text-3xl font-bold text-amber-600">
+                ¥{price.toLocaleString()}
+              </p>
+            )}
 
             {visible.length > 0 && (
               <dl className="mt-6 grid grid-cols-2 gap-4">

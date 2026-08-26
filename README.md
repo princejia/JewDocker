@@ -92,7 +92,7 @@ docker compose up -d --build
 app/
   (auth)/login          登录页
   (dashboard)/          后台（仪表盘/产品/裸石/销售/客户/报表/扫码/用户）
-  v/[type]/[id]/        公开展示页（扫码跳转，不含价格）
+  v/[type]/[id]/        公开展示页（扫码跳转，与标签同口径）
   api/                  API Routes
 components/             UI 与业务组件
 lib/
