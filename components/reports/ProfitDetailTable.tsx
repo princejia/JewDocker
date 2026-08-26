@@ -29,7 +29,7 @@ export function ProfitDetailTable({ rows }: { rows: ProfitRow[] }) {
   const filtered = q
     ? rows.filter(
         (r) =>
-          r.code.toLowerCase().includes(q) || r.name.toLowerCase().includes(q)
+          r.code.toLowerCase().includes(q) || r.name.toLowerCase().includes(q),
       )
     : rows;
 
@@ -45,7 +45,7 @@ export function ProfitDetailTable({ rows }: { rows: ProfitRow[] }) {
           placeholder="搜索编号或产品名称"
           className="sm:max-w-xs"
         />
-        <div className="flex gap-4 text-sm">
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
           <span className="text-gray-500">
             共 <strong className="text-gray-900">{filtered.length}</strong> 件
           </span>
@@ -57,14 +57,54 @@ export function ProfitDetailTable({ rows }: { rows: ProfitRow[] }) {
           </span>
           <span className="text-gray-500">
             利润合计{" "}
-            <strong className={totalProfit >= 0 ? "text-green-700" : "text-red-500"}>
+            <strong
+              className={totalProfit >= 0 ? "text-green-700" : "text-red-500"}
+            >
               {formatCurrency(totalProfit)}
             </strong>
           </span>
         </div>
       </div>
 
-      <div className="max-h-96 overflow-y-auto rounded-lg border">
+      <div className="max-h-96 space-y-2 overflow-y-auto md:hidden">
+        {filtered.length === 0 ? (
+          <p className="rounded-lg border py-10 text-center text-sm text-gray-400">
+            {rows.length === 0 ? "暂无已售产品" : "无匹配项"}
+          </p>
+        ) : (
+          filtered.map((r) => (
+            <div key={r.id} className="rounded-lg border bg-white p-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="truncate font-medium text-gray-900">{r.name}</p>
+                  <p className="mt-0.5 font-mono text-[11px] text-gray-400">
+                    {r.code}
+                  </p>
+                </div>
+                <span
+                  className={`shrink-0 font-semibold ${
+                    r.profit >= 0 ? "text-green-700" : "text-red-500"
+                  }`}
+                >
+                  {formatCurrency(r.profit)}
+                </span>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-gray-500">
+                <span>{formatDate(r.sold_at)}</span>
+                <span>
+                  出售价{" "}
+                  <span className="text-amber-700">
+                    {formatCurrency(r.sale_price)}
+                  </span>
+                </span>
+                <span>成本 {formatCurrency(r.cost)}</span>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      <div className="hidden max-h-96 overflow-y-auto rounded-lg border md:block">
         <Table>
           <TableHeader>
             <TableRow>
