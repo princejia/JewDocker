@@ -2,7 +2,13 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { Loader2, Trash2, ArrowLeftRight, RotateCcw, Undo2 } from "lucide-react";
+import {
+  Loader2,
+  Trash2,
+  ArrowLeftRight,
+  RotateCcw,
+  Undo2,
+} from "lucide-react";
 import { ItemLoanWithRelations } from "@/types";
 import { Button } from "@/components/ui/button";
 import { StatsCard } from "@/components/ui/StatsCard";
@@ -78,7 +84,7 @@ export default function LoansPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold text-gray-900">借调管理</h1>
         <LoanFormDialog onSaved={fetchLoans} />
       </div>
@@ -109,93 +115,174 @@ export default function LoansPage() {
           <Loader2 className="h-8 w-8 animate-spin text-amber-500" />
         </div>
       ) : (
-        <div className="rounded-xl border bg-white">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>物品</TableHead>
-                <TableHead>类型</TableHead>
-                <TableHead>借出人</TableHead>
-                <TableHead>联系方式</TableHead>
-                <TableHead>借出日期</TableHead>
-                <TableHead>预计归还</TableHead>
-                <TableHead>状态</TableHead>
-                <TableHead className="text-right">操作</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loans.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={8} className="text-center text-gray-400">
-                    暂无借调记录
-                  </TableCell>
-                </TableRow>
-              ) : (
-                loans.map((l) => (
-                  <TableRow key={l.id}>
-                    <TableCell className="font-medium">
+        <>
+          <div className="space-y-3 md:hidden">
+            {loans.length === 0 ? (
+              <p className="rounded-xl border bg-white py-10 text-center text-sm text-gray-400">
+                暂无借调记录
+              </p>
+            ) : (
+              loans.map((l) => (
+                <div key={l.id} className="rounded-xl border bg-white p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
                       {l.products ? (
                         <Link
                           href={`/products/${l.products.id}/view`}
-                          className="text-amber-700 hover:underline"
+                          className="block truncate font-medium text-amber-700"
                         >
                           {l.products.name}
                         </Link>
                       ) : (
-                        itemName(l)
+                        <p className="truncate font-medium text-gray-900">
+                          {itemName(l)}
+                        </p>
                       )}
+                      <p className="mt-0.5 text-xs text-gray-500">
+                        {l.borrower_name}
+                        {l.borrower_contact ? ` · ${l.borrower_contact}` : ""}
+                      </p>
+                    </div>
+                    {l.returned_at ? (
+                      <span className="shrink-0 rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">
+                        已归还
+                      </span>
+                    ) : (
+                      <span className="shrink-0 rounded-full bg-yellow-100 px-2.5 py-0.5 text-xs font-medium text-yellow-800">
+                        借出中
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="mt-2.5 flex flex-wrap gap-1.5 text-xs">
+                    <span className="rounded-full bg-gray-100 px-2 py-0.5 text-gray-600">
+                      {l.loose_stones ? "裸石" : "产品"}
+                    </span>
+                    <span className="rounded-full bg-gray-100 px-2 py-0.5 text-gray-600">
+                      借出 {formatDate(l.loaned_at)}
+                    </span>
+                    {l.due_at && (
+                      <span className="rounded-full bg-gray-100 px-2 py-0.5 text-gray-600">
+                        预计归还 {formatDate(l.due_at)}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="mt-3 flex justify-end gap-1 border-t pt-2">
+                    {!l.returned_at && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setReturnTarget(l)}
+                      >
+                        <RotateCcw className="h-4 w-4 text-green-600" />
+                        归还
+                      </Button>
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setDeleteTarget(l)}
+                    >
+                      <Trash2 className="h-4 w-4 text-red-500" />
+                    </Button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          <div className="hidden rounded-xl border bg-white md:block">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>物品</TableHead>
+                  <TableHead>类型</TableHead>
+                  <TableHead>借出人</TableHead>
+                  <TableHead>联系方式</TableHead>
+                  <TableHead>借出日期</TableHead>
+                  <TableHead>预计归还</TableHead>
+                  <TableHead>状态</TableHead>
+                  <TableHead className="text-right">操作</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {loans.length === 0 ? (
+                  <TableRow>
+                    <TableCell
+                      colSpan={8}
+                      className="text-center text-gray-400"
+                    >
+                      暂无借调记录
                     </TableCell>
-                    <TableCell>
-                      {l.loose_stones ? (
-                        <span className="text-blue-600">裸石</span>
-                      ) : (
-                        "产品"
-                      )}
-                    </TableCell>
-                    <TableCell>{l.borrower_name}</TableCell>
-                    <TableCell>{l.borrower_contact || "-"}</TableCell>
-                    <TableCell>{formatDate(l.loaned_at)}</TableCell>
-                    <TableCell>
-                      {l.due_at ? formatDate(l.due_at) : "-"}
-                    </TableCell>
-                    <TableCell>
-                      {l.returned_at ? (
-                        <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">
-                          已归还
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center rounded-full bg-yellow-100 px-2.5 py-0.5 text-xs font-medium text-yellow-800">
-                          借出中
-                        </span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-1">
-                        {!l.returned_at && (
+                  </TableRow>
+                ) : (
+                  loans.map((l) => (
+                    <TableRow key={l.id}>
+                      <TableCell className="font-medium">
+                        {l.products ? (
+                          <Link
+                            href={`/products/${l.products.id}/view`}
+                            className="text-amber-700 hover:underline"
+                          >
+                            {l.products.name}
+                          </Link>
+                        ) : (
+                          itemName(l)
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {l.loose_stones ? (
+                          <span className="text-blue-600">裸石</span>
+                        ) : (
+                          "产品"
+                        )}
+                      </TableCell>
+                      <TableCell>{l.borrower_name}</TableCell>
+                      <TableCell>{l.borrower_contact || "-"}</TableCell>
+                      <TableCell>{formatDate(l.loaned_at)}</TableCell>
+                      <TableCell>
+                        {l.due_at ? formatDate(l.due_at) : "-"}
+                      </TableCell>
+                      <TableCell>
+                        {l.returned_at ? (
+                          <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">
+                            已归还
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center rounded-full bg-yellow-100 px-2.5 py-0.5 text-xs font-medium text-yellow-800">
+                            借出中
+                          </span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-1">
+                          {!l.returned_at && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setReturnTarget(l)}
+                            >
+                              <RotateCcw className="h-4 w-4 text-green-600" />
+                              归还
+                            </Button>
+                          )}
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => setReturnTarget(l)}
+                            onClick={() => setDeleteTarget(l)}
                           >
-                            <RotateCcw className="h-4 w-4 text-green-600" />
-                            归还
+                            <Trash2 className="h-4 w-4 text-red-500" />
                           </Button>
-                        )}
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setDeleteTarget(l)}
-                        >
-                          <Trash2 className="h-4 w-4 text-red-500" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </div>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </>
       )}
 
       <ConfirmDialog

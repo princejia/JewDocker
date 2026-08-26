@@ -76,7 +76,7 @@ export default function RecyclesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold text-gray-900">回收管理</h1>
         <RecycleFormDialog onSaved={fetchAll} />
       </div>
@@ -97,87 +97,162 @@ export default function RecyclesPage() {
           <Loader2 className="h-8 w-8 animate-spin text-amber-500" />
         </div>
       ) : (
-        <div className="rounded-xl border bg-white">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>分类</TableHead>
-                <TableHead>日期</TableHead>
-                <TableHead>关联产品</TableHead>
-                <TableHead>备注</TableHead>
-                <TableHead className="text-right">操作</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {recycles.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={5} className="text-center text-gray-400">
-                    暂无回收记录
-                  </TableCell>
-                </TableRow>
-              ) : (
-                recycles.map((r) => (
-                  <TableRow key={r.id}>
-                    <TableCell className="font-medium">{r.category}</TableCell>
-                    <TableCell className="text-gray-600">
+        <>
+          <div className="space-y-3 md:hidden">
+            {recycles.length === 0 ? (
+              <p className="rounded-xl border bg-white py-10 text-center text-sm text-gray-400">
+                暂无回收记录
+              </p>
+            ) : (
+              recycles.map((r) => (
+                <div key={r.id} className="rounded-xl border bg-white p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <p className="font-medium text-gray-900">{r.category}</p>
+                    <span className="shrink-0 text-xs text-gray-500">
                       {formatDate(r.recycled_at)}
-                    </TableCell>
-                    <TableCell>
-                      {r.product_ids?.length ? (
-                        <div className="flex flex-wrap gap-1">
-                          {r.product_ids.map((id) => {
-                            const p = products[id];
-                            return p ? (
-                              <Link
-                                key={id}
-                                href={`/products/${id}/view`}
-                                className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-700 hover:text-amber-700"
-                              >
-                                {p.name}
-                              </Link>
-                            ) : (
-                              <span
-                                key={id}
-                                className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-400"
-                              >
-                                已删除产品
-                              </span>
-                            );
-                          })}
-                        </div>
-                      ) : (
-                        <span className="text-gray-400">-</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="max-w-xs truncate text-gray-600">
-                      {r.notes || "-"}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-1">
-                        <RecycleFormDialog
-                          recycle={r}
-                          onSaved={fetchAll}
-                          trigger={
-                            <Button variant="outline" size="sm">
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                          }
-                        />
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setDeleteTarget(r)}
-                        >
-                          <Trash2 className="h-4 w-4 text-red-500" />
+                    </span>
+                  </div>
+
+                  {!!r.product_ids?.length && (
+                    <div className="mt-2.5 flex flex-wrap gap-1">
+                      {r.product_ids.map((id) => {
+                        const p = products[id];
+                        return p ? (
+                          <Link
+                            key={id}
+                            href={`/products/${id}/view`}
+                            className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-700"
+                          >
+                            {p.name}
+                          </Link>
+                        ) : (
+                          <span
+                            key={id}
+                            className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-400"
+                          >
+                            已删除产品
+                          </span>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {r.notes && (
+                    <p className="mt-2 break-words text-xs text-gray-500">
+                      {r.notes}
+                    </p>
+                  )}
+
+                  <div className="mt-3 flex justify-end gap-1 border-t pt-2">
+                    <RecycleFormDialog
+                      recycle={r}
+                      onSaved={fetchAll}
+                      trigger={
+                        <Button variant="outline" size="sm">
+                          <Pencil className="h-4 w-4" />
                         </Button>
-                      </div>
+                      }
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setDeleteTarget(r)}
+                    >
+                      <Trash2 className="h-4 w-4 text-red-500" />
+                    </Button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          <div className="hidden rounded-xl border bg-white md:block">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>分类</TableHead>
+                  <TableHead>日期</TableHead>
+                  <TableHead>关联产品</TableHead>
+                  <TableHead>备注</TableHead>
+                  <TableHead className="text-right">操作</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {recycles.length === 0 ? (
+                  <TableRow>
+                    <TableCell
+                      colSpan={5}
+                      className="text-center text-gray-400"
+                    >
+                      暂无回收记录
                     </TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </div>
+                ) : (
+                  recycles.map((r) => (
+                    <TableRow key={r.id}>
+                      <TableCell className="font-medium">
+                        {r.category}
+                      </TableCell>
+                      <TableCell className="text-gray-600">
+                        {formatDate(r.recycled_at)}
+                      </TableCell>
+                      <TableCell>
+                        {r.product_ids?.length ? (
+                          <div className="flex flex-wrap gap-1">
+                            {r.product_ids.map((id) => {
+                              const p = products[id];
+                              return p ? (
+                                <Link
+                                  key={id}
+                                  href={`/products/${id}/view`}
+                                  className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-700 hover:text-amber-700"
+                                >
+                                  {p.name}
+                                </Link>
+                              ) : (
+                                <span
+                                  key={id}
+                                  className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-400"
+                                >
+                                  已删除产品
+                                </span>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <span className="text-gray-400">-</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="max-w-xs truncate text-gray-600">
+                        {r.notes || "-"}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-1">
+                          <RecycleFormDialog
+                            recycle={r}
+                            onSaved={fetchAll}
+                            trigger={
+                              <Button variant="outline" size="sm">
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                            }
+                          />
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setDeleteTarget(r)}
+                          >
+                            <Trash2 className="h-4 w-4 text-red-500" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </>
       )}
 
       <ConfirmDialog

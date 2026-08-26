@@ -96,7 +96,7 @@ export default function CustomersPage() {
         method: editing ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
-      }
+      },
     );
     setSaving(false);
     if (!res.ok) {
@@ -125,7 +125,7 @@ export default function CustomersPage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold text-gray-900">客户管理</h1>
         <Button onClick={openCreate}>
           <Plus className="h-4 w-4" />
@@ -145,64 +145,128 @@ export default function CustomersPage() {
           <Loader2 className="h-8 w-8 animate-spin text-amber-500" />
         </div>
       ) : (
-        <div className="rounded-xl border bg-white">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>姓名</TableHead>
-                <TableHead>电话</TableHead>
-                <TableHead>微信</TableHead>
-                <TableHead>备注</TableHead>
-                <TableHead>创建时间</TableHead>
-                <TableHead className="text-right">操作</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {customers.length === 0 ? (
+        <>
+          <div className="space-y-3 md:hidden">
+            {customers.length === 0 ? (
+              <p className="rounded-xl border bg-white py-10 text-center text-sm text-gray-400">
+                暂无客户
+              </p>
+            ) : (
+              customers.map((c) => (
+                <div key={c.id} className="rounded-xl border bg-white p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <p className="min-w-0 truncate font-medium text-gray-900">
+                      {c.name}
+                    </p>
+                    <span className="shrink-0 text-xs text-gray-400">
+                      {formatDate(c.created_at)}
+                    </span>
+                  </div>
+
+                  <div className="mt-1 space-y-0.5 text-xs text-gray-500">
+                    {c.phone && (
+                      <p>
+                        电话：
+                        <a
+                          href={`tel:${c.phone}`}
+                          className="text-amber-700 underline-offset-2 hover:underline"
+                        >
+                          {c.phone}
+                        </a>
+                      </p>
+                    )}
+                    {c.wechat && <p>微信：{c.wechat}</p>}
+                    {c.notes && <p className="break-words">{c.notes}</p>}
+                  </div>
+
+                  <div className="mt-3 flex items-center justify-end gap-1 border-t pt-2">
+                    <CustomerHistoryDialog
+                      customerId={c.id}
+                      customerName={c.name}
+                    />
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => openEdit(c)}
+                    >
+                      <Pencil className="h-4 w-4" />
+                      编辑
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setDeleteTarget(c)}
+                    >
+                      <Trash2 className="h-4 w-4 text-red-500" />
+                    </Button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          <div className="hidden rounded-xl border bg-white md:block">
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center text-gray-400">
-                    暂无客户
-                  </TableCell>
+                  <TableHead>姓名</TableHead>
+                  <TableHead>电话</TableHead>
+                  <TableHead>微信</TableHead>
+                  <TableHead>备注</TableHead>
+                  <TableHead>创建时间</TableHead>
+                  <TableHead className="text-right">操作</TableHead>
                 </TableRow>
-              ) : (
-                customers.map((c) => (
-                  <TableRow key={c.id}>
-                    <TableCell className="font-medium">{c.name}</TableCell>
-                    <TableCell>{c.phone || "-"}</TableCell>
-                    <TableCell>{c.wechat || "-"}</TableCell>
-                    <TableCell className="max-w-xs truncate text-gray-500">
-                      {c.notes || "-"}
-                    </TableCell>
-                    <TableCell>{formatDate(c.created_at)}</TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        <CustomerHistoryDialog
-                          customerId={c.id}
-                          customerName={c.name}
-                        />
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => openEdit(c)}
-                        >
-                          <Pencil className="h-4 w-4" />
-                          编辑
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setDeleteTarget(c)}
-                        >
-                          <Trash2 className="h-4 w-4 text-red-500" />
-                        </Button>
-                      </div>
+              </TableHeader>
+              <TableBody>
+                {customers.length === 0 ? (
+                  <TableRow>
+                    <TableCell
+                      colSpan={6}
+                      className="text-center text-gray-400"
+                    >
+                      暂无客户
                     </TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </div>
+                ) : (
+                  customers.map((c) => (
+                    <TableRow key={c.id}>
+                      <TableCell className="font-medium">{c.name}</TableCell>
+                      <TableCell>{c.phone || "-"}</TableCell>
+                      <TableCell>{c.wechat || "-"}</TableCell>
+                      <TableCell className="max-w-xs truncate text-gray-500">
+                        {c.notes || "-"}
+                      </TableCell>
+                      <TableCell>{formatDate(c.created_at)}</TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <CustomerHistoryDialog
+                            customerId={c.id}
+                            customerName={c.name}
+                          />
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => openEdit(c)}
+                          >
+                            <Pencil className="h-4 w-4" />
+                            编辑
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setDeleteTarget(c)}
+                          >
+                            <Trash2 className="h-4 w-4 text-red-500" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </>
       )}
 
       <Dialog open={open} onOpenChange={setOpen}>

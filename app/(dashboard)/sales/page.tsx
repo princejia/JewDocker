@@ -23,7 +23,7 @@ export default async function SalesPage() {
   const { data } = await supabase
     .from("product_sales")
     .select(
-      "*, products(id, name, image_urls, sale_status), customers(id, name), loose_stones(id, material, image_urls, sale_status)"
+      "*, products(id, name, image_urls, sale_status), customers(id, name), loose_stones(id, material, image_urls, sale_status)",
     )
     .order("sold_at", { ascending: false })
     .order("created_at", { ascending: false });
@@ -36,7 +36,7 @@ export default async function SalesPage() {
   const returns = (returnsData ?? []) as Pick<ProductReturn, "refund_amount">[];
   const totalRefund = returns.reduce(
     (s, r) => s + Number(r.refund_amount || 0),
-    0
+    0,
   );
 
   const grossRevenue = sales.reduce((s, r) => s + Number(r.sale_price || 0), 0);
@@ -45,7 +45,7 @@ export default async function SalesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold text-gray-900">销售记录</h1>
         <RecordSaleDialog />
       </div>
@@ -71,7 +71,78 @@ export default async function SalesPage() {
         />
       </div>
 
-      <div className="rounded-xl border bg-white">
+      <div className="space-y-3 md:hidden">
+        {sales.length === 0 ? (
+          <p className="rounded-xl border bg-white py-10 text-center text-sm text-gray-400">
+            暂无销售记录
+          </p>
+        ) : (
+          sales.map((s) => {
+            const consigned =
+              (s.products?.sale_status ?? s.loose_stones?.sale_status) ===
+              "consignment";
+            return (
+              <div key={s.id} className="rounded-xl border bg-white p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    {s.products ? (
+                      <Link
+                        href={`/products/${s.products.id}/view`}
+                        className="block truncate font-medium text-amber-700"
+                      >
+                        {s.products.name}
+                      </Link>
+                    ) : (
+                      <p className="truncate font-medium text-gray-900">
+                        {s.loose_stones?.material ?? "已删除记录"}
+                      </p>
+                    )}
+                    <p className="mt-0.5 text-xs text-gray-500">
+                      {formatDate(s.sold_at)} ·{" "}
+                      {s.customers?.name ?? "未指定客户"}
+                    </p>
+                  </div>
+                  <span className="shrink-0 font-semibold text-amber-700">
+                    {formatCurrency(s.sale_price)}
+                  </span>
+                </div>
+
+                <div className="mt-2.5 flex flex-wrap gap-1.5 text-xs">
+                  <span className="rounded-full bg-gray-100 px-2 py-0.5 text-gray-600">
+                    {s.loose_stones ? "裸石" : "产品"}
+                  </span>
+                  <span
+                    className={
+                      consigned
+                        ? "rounded-full bg-purple-50 px-2 py-0.5 text-purple-700"
+                        : "rounded-full bg-green-50 px-2 py-0.5 text-green-700"
+                    }
+                  >
+                    {consigned ? "借售" : "出售"}
+                  </span>
+                  {s.payment_method && (
+                    <span className="rounded-full bg-gray-100 px-2 py-0.5 text-gray-600">
+                      {s.payment_method}
+                    </span>
+                  )}
+                </div>
+
+                {s.notes && (
+                  <p className="mt-2 break-words text-xs text-gray-500">
+                    {s.notes}
+                  </p>
+                )}
+
+                <div className="mt-3 border-t pt-2">
+                  <SaleRowActions sale={s} />
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      <div className="hidden rounded-xl border bg-white md:block">
         <Table>
           <TableHeader>
             <TableRow>
@@ -105,7 +176,7 @@ export default async function SalesPage() {
                         {s.products.name}
                       </Link>
                     ) : (
-                      s.loose_stones?.material ?? "已删除记录"
+                      (s.loose_stones?.material ?? "已删除记录")
                     )}
                   </TableCell>
                   <TableCell>
@@ -116,8 +187,8 @@ export default async function SalesPage() {
                     )}
                   </TableCell>
                   <TableCell>
-                    {(s.products?.sale_status ?? s.loose_stones?.sale_status) ===
-                    "consignment" ? (
+                    {(s.products?.sale_status ??
+                      s.loose_stones?.sale_status) === "consignment" ? (
                       <span className="text-purple-600">借售</span>
                     ) : (
                       <span className="text-green-600">出售</span>
