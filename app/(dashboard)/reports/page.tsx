@@ -16,6 +16,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { formatCurrency, formatDate, formatProductCode } from "@/lib/utils";
+import { CollapsibleRows } from "@/components/ui/CollapsibleRows";
 import { purchaseCostOf } from "@/lib/constants";
 import { Coins, HelpCircle, Timer } from "lucide-react";
 
@@ -270,38 +271,40 @@ export default async function ReportsPage() {
                   </TableCell>
                 </TableRow>
               ) : (
-                monthlyRows.map((m) => {
-                  const net = m.revenue - m.refund;
-                  const profit = m.revenue - m.cost - m.refund;
-                  return (
-                    <TableRow key={m.month}>
-                      <TableCell className="font-medium">{m.month}</TableCell>
-                      <TableCell className="text-right">{m.count}</TableCell>
-                      <TableCell className="text-right">
-                        {formatCurrency(m.revenue)}
-                      </TableCell>
-                      <TableCell className="text-right text-red-500">
-                        {m.refund ? `-${formatCurrency(m.refund)}` : "-"}
-                      </TableCell>
-                      <TableCell className="text-right text-amber-700">
-                        {formatCurrency(net)}
-                      </TableCell>
-                      <TableCell className="text-right text-gray-600">
-                        {formatCurrency(m.cost)}
-                      </TableCell>
-                      <TableCell
-                        className={`text-right font-medium ${
-                          profit >= 0 ? "text-green-700" : "text-red-500"
-                        }`}
-                      >
-                        {formatCurrency(profit)}
-                      </TableCell>
-                      <TableCell className="text-right text-gray-600">
-                        {net ? `${((profit / net) * 100).toFixed(1)}%` : "-"}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })
+                <CollapsibleRows colSpan={8}>
+                  {monthlyRows.map((m) => {
+                    const net = m.revenue - m.refund;
+                    const profit = m.revenue - m.cost - m.refund;
+                    return (
+                      <TableRow key={m.month}>
+                        <TableCell className="font-medium">{m.month}</TableCell>
+                        <TableCell className="text-right">{m.count}</TableCell>
+                        <TableCell className="text-right">
+                          {formatCurrency(m.revenue)}
+                        </TableCell>
+                        <TableCell className="text-right text-red-500">
+                          {m.refund ? `-${formatCurrency(m.refund)}` : "-"}
+                        </TableCell>
+                        <TableCell className="text-right text-amber-700">
+                          {formatCurrency(net)}
+                        </TableCell>
+                        <TableCell className="text-right text-gray-600">
+                          {formatCurrency(m.cost)}
+                        </TableCell>
+                        <TableCell
+                          className={`text-right font-medium ${
+                            profit >= 0 ? "text-green-700" : "text-red-500"
+                          }`}
+                        >
+                          {formatCurrency(profit)}
+                        </TableCell>
+                        <TableCell className="text-right text-gray-600">
+                          {net ? `${((profit / net) * 100).toFixed(1)}%` : "-"}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </CollapsibleRows>
               )}
             </TableBody>
           </Table>

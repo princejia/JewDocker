@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/table";
 import { Receipt, TrendingUp, Users } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { CollapsibleRows } from "@/components/ui/CollapsibleRows";
 import { RecordSaleDialog } from "@/components/sales/RecordSaleDialog";
 import { SaleRowActions } from "@/components/sales/SaleRowActions";
 import { ReturnsManager } from "@/components/sales/ReturnsManager";
@@ -128,24 +129,26 @@ export default async function SalesPage() {
                 </TableCell>
               </TableRow>
             ) : (
-              monthlyRows.map((m) => (
-                <TableRow key={m.month}>
-                  <TableCell className="font-medium">{m.month}</TableCell>
-                  <TableCell className="text-right">{m.count}</TableCell>
-                  <TableCell className="text-right">
-                    {formatCurrency(m.gross)}
-                  </TableCell>
-                  <TableCell className="text-right text-red-500">
-                    {m.refund ? `-${formatCurrency(m.refund)}` : "-"}
-                  </TableCell>
-                  <TableCell className="text-right font-medium text-amber-700">
-                    {formatCurrency(m.gross - m.refund)}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {m.count ? formatCurrency(m.gross / m.count) : "-"}
-                  </TableCell>
-                </TableRow>
-              ))
+              <CollapsibleRows colSpan={6}>
+                {monthlyRows.map((m) => (
+                  <TableRow key={m.month}>
+                    <TableCell className="font-medium">{m.month}</TableCell>
+                    <TableCell className="text-right">{m.count}</TableCell>
+                    <TableCell className="text-right">
+                      {formatCurrency(m.gross)}
+                    </TableCell>
+                    <TableCell className="text-right text-red-500">
+                      {m.refund ? `-${formatCurrency(m.refund)}` : "-"}
+                    </TableCell>
+                    <TableCell className="text-right font-medium text-amber-700">
+                      {formatCurrency(m.gross - m.refund)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {m.count ? formatCurrency(m.gross / m.count) : "-"}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </CollapsibleRows>
             )}
           </TableBody>
         </Table>
