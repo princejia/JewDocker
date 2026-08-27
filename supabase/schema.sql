@@ -278,6 +278,11 @@ ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS surcharge_discount DECIMAL(6,4)
 ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS surcharge_subtotal DECIMAL(12,2);
 ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS gold_price         DECIMAL(12,2);  -- 当日金价 g/元
 ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS gold_subtotal      DECIMAL(12,2);
+ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS code               VARCHAR(20);    -- 报价编号 Q + 年月日时分秒
+
+-- 销售记录回指报价明细，便于从销售流水反查报价
+ALTER TABLE product_sales ADD COLUMN IF NOT EXISTS quote_item_id UUID REFERENCES quote_items(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_product_sales_quote_item ON product_sales(quote_item_id);
 
 -- ------------------------------------------------------------
 -- 自动更新 updated_at 触发器
@@ -371,9 +376,15 @@ CREATE TRIGGER loose_stones_set_code
   BEFORE INSERT ON loose_stones
   FOR EACH ROW EXECUTE FUNCTION set_record_code('L');
 
+DROP TRIGGER IF EXISTS quote_items_set_code ON quote_items;
+CREATE TRIGGER quote_items_set_code
+  BEFORE INSERT ON quote_items
+  FOR EACH ROW EXECUTE FUNCTION set_record_code('Q');
+
 -- 回填已有数据的编号（幂等）
 UPDATE products     SET code = next_record_code('P', created_at) WHERE code IS NULL OR code = '';
 UPDATE loose_stones SET code = next_record_code('L', created_at) WHERE code IS NULL OR code = '';
+UPDATE quote_items  SET code = next_record_code('Q', created_at) WHERE code IS NULL OR code = '';
 
 -- ------------------------------------------------------------
 -- 常用索引
@@ -389,6 +400,7 @@ DROP INDEX IF EXISTS idx_products_code;
 DROP INDEX IF EXISTS idx_loose_stones_code;
 CREATE UNIQUE INDEX IF NOT EXISTS uq_products_code ON products(code);
 CREATE UNIQUE INDEX IF NOT EXISTS uq_loose_stones_code ON loose_stones(code);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_quote_items_code ON quote_items(code);
 
 -- ============================================================
 -- 行级安全策略 (RLS)

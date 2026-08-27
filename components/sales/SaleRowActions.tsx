@@ -113,6 +113,19 @@ export function SaleRowActions({ sale }: { sale: ProductSaleWithRelations }) {
             <DialogTitle>修改销售记录</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
+            <div className="rounded-lg bg-gray-50 p-3">
+              <p className="text-xs text-gray-400">
+                {sale.loose_stones ? "裸石" : "产品"}
+              </p>
+              <p className="mt-0.5 flex flex-wrap items-center gap-2 text-sm font-medium text-gray-800">
+                <span className="font-mono text-xs text-gray-500">
+                  {sale.products?.code ?? sale.loose_stones?.code ?? "-"}
+                </span>
+                {sale.products?.name ??
+                  sale.loose_stones?.material ??
+                  "已删除记录"}
+              </p>
+            </div>
             <div className="space-y-2">
               <Label>销售方式</Label>
               <Select

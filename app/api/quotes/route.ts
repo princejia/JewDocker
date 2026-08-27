@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase-server";
+import { ensureCustomerId } from "@/lib/customers";
 import { quoteSchema } from "@/lib/validations";
 
 export async function GET() {
@@ -25,11 +26,15 @@ export async function POST(req: NextRequest) {
   }
 
   const supabase = createServerClient();
+  const customerName = parsed.data.customer_name.trim();
+  const customerId =
+    parsed.data.customer_id ?? (await ensureCustomerId(customerName));
+
   const { data, error } = await supabase
     .from("quotes")
     .insert({
-      customer_id: parsed.data.customer_id ?? null,
-      customer_name: parsed.data.customer_name.trim(),
+      customer_id: customerId,
+      customer_name: customerName,
       notes: parsed.data.notes ?? null,
     })
     .select()

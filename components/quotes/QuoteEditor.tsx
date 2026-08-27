@@ -1,17 +1,25 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, ChevronDown, Trash2 } from "lucide-react";
+import { ArrowLeft, ChevronDown, Pencil, Trash2 } from "lucide-react";
 import { Product, QuoteItemWithProduct, QuoteWithItems } from "@/types";
 import { formatCurrency, formatDateTime, formatProductCode, cn } from "@/lib/utils";
 import { isGoldCategory } from "@/lib/constants";
-import { computeQuotePricing } from "@/lib/quotes";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import {
+  QuoteItemFields,
+  emptyQuoteItemForm,
+  quoteItemFormFromProduct,
+  quoteItemPayload,
+  quoteItemPricing,
+  type QuoteItemFormState,
+} from "@/components/quotes/QuoteItemFields";
+import { EditQuoteItemDialog } from "@/components/quotes/EditQuoteItemDialog";
 import {
   Table,
   TableBody,
@@ -42,6 +50,7 @@ function pricingDetail(item: QuoteItemWithProduct): string {
 
 export function QuoteEditor({ quote }: { quote: QuoteWithItems }) {
   const router = useRouter();
+  const highlightId = useSearchParams().get("item");
 
   const [customerName, setCustomerName] = useState(quote.customer_name);
   const [savingName, setSavingName] = useState(false);
@@ -52,18 +61,14 @@ export function QuoteEditor({ quote }: { quote: QuoteWithItems }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const pickerRef = useRef<HTMLDivElement>(null);
 
-  const [listPrice, setListPrice] = useState("");
-  const [discount, setDiscount] = useState("1");
-  const [weight, setWeight] = useState("");
-  const [laborPrice, setLaborPrice] = useState("");
-  const [laborDiscount, setLaborDiscount] = useState("1");
-  const [surcharge, setSurcharge] = useState("");
-  const [surchargeDiscount, setSurchargeDiscount] = useState("1");
-  const [goldPrice, setGoldPrice] = useState("");
+  const [form, setForm] = useState<QuoteItemFormState>(emptyQuoteItemForm);
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [busyItemId, setBusyItemId] = useState<string | null>(null);
+  const [editTarget, setEditTarget] = useState<QuoteItemWithProduct | null>(
+    null,
+  );
   const [deleteTarget, setDeleteTarget] = useState<QuoteItemWithProduct | null>(
     null,
   );
@@ -127,45 +132,13 @@ export function QuoteEditor({ quote }: { quote: QuoteWithItems }) {
 
   const selected = pickList.find((it) => it.id === productId) ?? null;
   const isGold = isGoldCategory(selected?.product.gemstone_category);
-
-  const pricing = computeQuotePricing({
-    is_gold: isGold,
-    weight: Number(weight || 0),
-    list_price: Number(listPrice || 0),
-    discount: Number(discount || 0),
-    labor_price: Number(laborPrice || 0),
-    labor_discount: Number(laborDiscount || 0),
-    surcharge: Number(surcharge || 0),
-    surcharge_discount: Number(surchargeDiscount || 0),
-    gold_price: Number(goldPrice || 0),
-  });
-
-  function resetForm() {
-    setProductId("");
-    setQuery("");
-    setListPrice("");
-    setDiscount("1");
-    setWeight("");
-    setLaborPrice("");
-    setLaborDiscount("1");
-    setSurcharge("");
-    setSurchargeDiscount("1");
-    setGoldPrice("");
-  }
+  const pricing = quoteItemPricing(form, isGold);
 
   function selectProduct(id: string) {
     setProductId(id);
     setPickerOpen(false);
     const p = pickList.find((x) => x.id === id)?.product;
-    if (!p) return;
-    setListPrice(String(p.price ?? ""));
-    setDiscount("1");
-    setWeight(p.total_weight != null ? String(p.total_weight) : "");
-    setLaborPrice(p.labor_sale_price != null ? String(p.labor_sale_price) : "");
-    setLaborDiscount("1");
-    setSurcharge(p.surcharge != null ? String(p.surcharge) : "");
-    setSurchargeDiscount("1");
-    setGoldPrice("");
+    if (p) setForm(quoteItemFormFromProduct(p));
   }
 
   async function saveCustomerName() {
@@ -186,7 +159,7 @@ export function QuoteEditor({ quote }: { quote: QuoteWithItems }) {
       setError("请选择产品");
       return;
     }
-    if (isGold && !Number(goldPrice || 0)) {
+    if (isGold && !Number(form.goldPrice || 0)) {
       setError("请输入当日金价");
       return;
     }
@@ -197,15 +170,7 @@ export function QuoteEditor({ quote }: { quote: QuoteWithItems }) {
       body: JSON.stringify({
         quote_id: quote.id,
         product_id: productId,
-        is_gold: isGold,
-        weight: Number(weight || 0),
-        list_price: Number(listPrice || 0),
-        discount: Number(discount || 0),
-        labor_price: Number(laborPrice || 0),
-        labor_discount: Number(laborDiscount || 0),
-        surcharge: Number(surcharge || 0),
-        surcharge_discount: Number(surchargeDiscount || 0),
-        gold_price: Number(goldPrice || 0),
+        ...quoteItemPayload(form, isGold),
       }),
     });
     setAdding(false);
@@ -214,7 +179,9 @@ export function QuoteEditor({ quote }: { quote: QuoteWithItems }) {
       setError(json.error || "保存失败");
       return;
     }
-    resetForm();
+    setProductId("");
+    setQuery("");
+    setForm(emptyQuoteItemForm);
     router.refresh();
   }
 
@@ -393,135 +360,12 @@ export function QuoteEditor({ quote }: { quote: QuoteWithItems }) {
                 </div>
               </dl>
 
-              {isGold ? (
-                <div className="space-y-3">
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                    <div className="space-y-2">
-                      <Label htmlFor="labor-price">工费销售价格 (g/元)</Label>
-                      <Input
-                        id="labor-price"
-                        type="number"
-                        inputMode="decimal"
-                        value={laborPrice}
-                        onChange={(e) => setLaborPrice(e.target.value)}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="labor-discount">工费销售折扣</Label>
-                      <Input
-                        id="labor-discount"
-                        type="number"
-                        inputMode="decimal"
-                        step="0.01"
-                        value={laborDiscount}
-                        onChange={(e) => setLaborDiscount(e.target.value)}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>工费小计</Label>
-                      <div className="flex h-10 items-center rounded-md border border-input bg-gray-50 px-3 text-sm text-gray-800">
-                        {formatCurrency(pricing.labor_subtotal)}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                    <div className="space-y-2">
-                      <Label htmlFor="surcharge">附加费 (元)</Label>
-                      <Input
-                        id="surcharge"
-                        type="number"
-                        inputMode="decimal"
-                        value={surcharge}
-                        onChange={(e) => setSurcharge(e.target.value)}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="surcharge-discount">附加费折扣</Label>
-                      <Input
-                        id="surcharge-discount"
-                        type="number"
-                        inputMode="decimal"
-                        step="0.01"
-                        value={surchargeDiscount}
-                        onChange={(e) => setSurchargeDiscount(e.target.value)}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>附加费小计</Label>
-                      <div className="flex h-10 items-center rounded-md border border-input bg-gray-50 px-3 text-sm text-gray-800">
-                        {formatCurrency(pricing.surcharge_subtotal)}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                    <div className="space-y-2">
-                      <Label htmlFor="gold-price">当日金价 (g/元) *</Label>
-                      <Input
-                        id="gold-price"
-                        type="number"
-                        inputMode="decimal"
-                        value={goldPrice}
-                        onChange={(e) => setGoldPrice(e.target.value)}
-                        placeholder="按克计价"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="weight">克重</Label>
-                      <Input
-                        id="weight"
-                        type="number"
-                        inputMode="decimal"
-                        value={weight}
-                        onChange={(e) => setWeight(e.target.value)}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>金价小计</Label>
-                      <div className="flex h-10 items-center rounded-md border border-input bg-gray-50 px-3 text-sm text-gray-800">
-                        {formatCurrency(pricing.gold_subtotal)}
-                      </div>
-                    </div>
-                  </div>
-
-                  <p className="text-xs text-gray-400">
-                    工费小计 = 工费销售价格 × 克重 × 工费销售折扣；附加费小计 =
-                    附加费 × 附加费折扣；金价小计 = 当日金价 × 克重
-                  </p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                  <div className="space-y-2">
-                    <Label htmlFor="list-price">产品金额</Label>
-                    <Input
-                      id="list-price"
-                      type="number"
-                      inputMode="decimal"
-                      value={listPrice}
-                      onChange={(e) => setListPrice(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="discount">折扣</Label>
-                    <Input
-                      id="discount"
-                      type="number"
-                      inputMode="decimal"
-                      step="0.01"
-                      value={discount}
-                      onChange={(e) => setDiscount(e.target.value)}
-                      placeholder="0.85 = 85 折"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>报价金额</Label>
-                    <div className="flex h-10 items-center rounded-md border border-input bg-gray-50 px-3 text-sm text-gray-800">
-                      {formatCurrency(pricing.quoted_price)}
-                    </div>
-                  </div>
-                </div>
-              )}
+              <QuoteItemFields
+                state={form}
+                onChange={setForm}
+                isGold={isGold}
+                idPrefix="add"
+              />
 
               <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-3">
                 <p className="text-sm text-gray-500">
@@ -553,6 +397,7 @@ export function QuoteEditor({ quote }: { quote: QuoteWithItems }) {
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead>报价编号</TableHead>
               <TableHead>产品</TableHead>
               <TableHead>计价明细</TableHead>
               <TableHead className="text-right">销售价格</TableHead>
@@ -563,13 +408,19 @@ export function QuoteEditor({ quote }: { quote: QuoteWithItems }) {
           <TableBody>
             {items.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center text-gray-400">
+                <TableCell colSpan={6} className="text-center text-gray-400">
                   还没有报价记录
                 </TableCell>
               </TableRow>
             ) : (
               items.map((item) => (
-                <TableRow key={item.id}>
+                <TableRow
+                  key={item.id}
+                  className={cn(item.id === highlightId && "bg-amber-50")}
+                >
+                  <TableCell className="font-mono text-xs text-gray-500">
+                    {item.code ?? "-"}
+                  </TableCell>
                   <TableCell className="font-medium">
                     {item.products ? (
                       <Link
@@ -612,6 +463,14 @@ export function QuoteEditor({ quote }: { quote: QuoteWithItems }) {
                           </Button>
                           <button
                             type="button"
+                            onClick={() => setEditTarget(item)}
+                            className="rounded-lg p-2 text-gray-400 hover:bg-amber-50 hover:text-amber-700"
+                            aria-label="修改报价记录"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
                             onClick={() => setDeleteTarget(item)}
                             className="rounded-lg p-2 text-gray-400 hover:bg-red-50 hover:text-red-500"
                             aria-label="删除报价记录"
@@ -628,6 +487,11 @@ export function QuoteEditor({ quote }: { quote: QuoteWithItems }) {
           </TableBody>
         </Table>
       </div>
+
+      <EditQuoteItemDialog
+        item={editTarget}
+        onOpenChange={(o) => !o && setEditTarget(null)}
+      />
 
       <ConfirmDialog
         open={!!deleteTarget}

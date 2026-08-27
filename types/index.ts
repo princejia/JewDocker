@@ -103,6 +103,7 @@ export interface ProductSale {
   product_id: string | null;
   loose_stone_id: string | null;
   customer_id: string | null;
+  quote_item_id: string | null;
   sale_price: number;
   payment_method: string | null;
   sold_at: string;
@@ -111,9 +112,16 @@ export interface ProductSale {
 }
 
 export interface ProductSaleWithRelations extends ProductSale {
-  products?: Pick<Product, "id" | "name" | "image_urls" | "sale_status"> | null;
-  loose_stones?: Pick<LooseStone, "id" | "material" | "image_urls" | "sale_status"> | null;
+  products?: Pick<
+    Product,
+    "id" | "code" | "name" | "image_urls" | "sale_status"
+  > | null;
+  loose_stones?: Pick<
+    LooseStone,
+    "id" | "code" | "material" | "image_urls" | "sale_status"
+  > | null;
   customers?: Pick<Customer, "id" | "name"> | null;
+  quote_items?: { id: string; code: string | null; quote_id: string } | null;
 }
 
 export interface ItemLoan {
@@ -183,6 +191,7 @@ export interface Quote {
 
 export interface QuoteItem {
   id: string;
+  code: string | null;
   quote_id: string;
   product_id: string | null;
   list_price: number;

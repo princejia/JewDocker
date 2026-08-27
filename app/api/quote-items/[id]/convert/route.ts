@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase-server";
+import { ensureCustomerId } from "@/lib/customers";
 
 interface ItemRow {
   id: string;
@@ -57,27 +58,10 @@ export async function POST(
     );
   }
 
-  // 报价单只存客户名时，按同名客户复用，没有就建一个
-  let customerId = item.quotes?.customer_id ?? null;
-  const customerName = item.quotes?.customer_name?.trim();
-  if (!customerId && customerName) {
-    const { data: existing } = await supabase
-      .from("customers")
-      .select("id")
-      .eq("name", customerName)
-      .limit(1)
-      .maybeSingle();
-    if (existing) {
-      customerId = existing.id;
-    } else {
-      const { data: created } = await supabase
-        .from("customers")
-        .insert({ name: customerName })
-        .select("id")
-        .single();
-      customerId = created?.id ?? null;
-    }
-  }
+  // 报价单只存客户名时（历史数据），这里再兼容一次
+  const customerId =
+    item.quotes?.customer_id ??
+    (await ensureCustomerId(item.quotes?.customer_name));
 
   const soldAt = new Date().toISOString().slice(0, 10);
   const salePrice = Number(item.quoted_price || 0);
@@ -87,6 +71,7 @@ export async function POST(
     .insert({
       product_id: item.product_id,
       customer_id: customerId,
+      quote_item_id: item.id,
       sale_price: salePrice,
       sold_at: soldAt,
       notes: "由报价转入",

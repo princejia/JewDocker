@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/table";
 import { formatCurrency, formatDateTime } from "@/lib/utils";
 import { NewQuoteDialog } from "@/components/quotes/NewQuoteDialog";
+import { DeleteQuoteButton } from "@/components/quotes/DeleteQuoteButton";
 
 export const dynamic = "force-dynamic";
 
@@ -59,30 +60,33 @@ export default async function QuotesPage() {
           quotes.map((q) => {
             const s = summarize(q);
             return (
-              <Link
-                key={q.id}
-                href={`/quotes/${q.id}`}
-                className="block rounded-xl border bg-white p-4"
-              >
+              <div key={q.id} className="rounded-xl border bg-white p-4">
                 <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
+                  <Link href={`/quotes/${q.id}`} className="min-w-0 flex-1">
                     <p className="truncate font-medium text-amber-700">
                       {q.customer_name}
                     </p>
                     <p className="mt-0.5 text-xs text-gray-500">
                       {formatDateTime(q.created_at)} · {s.count} 件
                     </p>
+                  </Link>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <span className="font-semibold text-amber-700">
+                      {formatCurrency(s.total)}
+                    </span>
+                    <DeleteQuoteButton
+                      quoteId={q.id}
+                      customerName={q.customer_name}
+                      convertedCount={s.converted}
+                    />
                   </div>
-                  <span className="shrink-0 font-semibold text-amber-700">
-                    {formatCurrency(s.total)}
-                  </span>
                 </div>
                 {s.converted > 0 && (
                   <p className="mt-2 text-xs text-green-700">
                     已转销售 {s.converted} 件
                   </p>
                 )}
-              </Link>
+              </div>
             );
           })
         )}
@@ -98,12 +102,13 @@ export default async function QuotesPage() {
               <TableHead className="text-right">已转销售</TableHead>
               <TableHead>报价时间</TableHead>
               <TableHead>备注</TableHead>
+              <TableHead className="text-right">操作</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {quotes.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center text-gray-400">
+                <TableCell colSpan={7} className="text-center text-gray-400">
                   暂无报价
                 </TableCell>
               </TableRow>
@@ -133,6 +138,15 @@ export default async function QuotesPage() {
                       title={q.notes ?? undefined}
                     >
                       {q.notes || "-"}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end">
+                        <DeleteQuoteButton
+                          quoteId={q.id}
+                          customerName={q.customer_name}
+                          convertedCount={s.converted}
+                        />
+                      </div>
                     </TableCell>
                   </TableRow>
                 );

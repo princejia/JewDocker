@@ -47,7 +47,7 @@ export default async function SalesPage({
   const { data } = await supabase
     .from("product_sales")
     .select(
-      "*, products(id, name, image_urls, sale_status), customers(id, name), loose_stones(id, material, image_urls, sale_status)",
+      "*, products(id, code, name, image_urls, sale_status), customers(id, name), loose_stones(id, code, material, image_urls, sale_status), quote_items(id, code, quote_id)",
     )
     .order("sold_at", { ascending: false })
     .order("created_at", { ascending: false })
@@ -235,6 +235,14 @@ export default async function SalesPage({
                       {s.payment_method}
                     </span>
                   )}
+                  {s.quote_items?.code && (
+                    <Link
+                      href={`/quotes/${s.quote_items.quote_id}?item=${s.quote_items.id}`}
+                      className="rounded-full bg-amber-50 px-2 py-0.5 font-mono text-amber-700"
+                    >
+                      {s.quote_items.code}
+                    </Link>
+                  )}
                 </div>
 
                 {s.notes && (
@@ -260,6 +268,7 @@ export default async function SalesPage({
               <TableHead>类型</TableHead>
               <TableHead>销售方式</TableHead>
               <TableHead>客户</TableHead>
+              <TableHead>报价编号</TableHead>
               <TableHead className="text-right">成交价</TableHead>
               <TableHead>付款方式</TableHead>
               <TableHead>成交时间</TableHead>
@@ -270,7 +279,7 @@ export default async function SalesPage({
           <TableBody>
             {sales.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} className="text-center text-gray-400">
+                <TableCell colSpan={10} className="text-center text-gray-400">
                   暂无销售记录
                 </TableCell>
               </TableRow>
@@ -305,6 +314,18 @@ export default async function SalesPage({
                     )}
                   </TableCell>
                   <TableCell>{s.customers?.name ?? "-"}</TableCell>
+                  <TableCell>
+                    {s.quote_items?.code ? (
+                      <Link
+                        href={`/quotes/${s.quote_items.quote_id}?item=${s.quote_items.id}`}
+                        className="font-mono text-xs text-amber-700 hover:underline"
+                      >
+                        {s.quote_items.code}
+                      </Link>
+                    ) : (
+                      "-"
+                    )}
+                  </TableCell>
                   <TableCell className="text-right font-medium text-amber-700">
                     {formatCurrency(s.sale_price)}
                   </TableCell>
