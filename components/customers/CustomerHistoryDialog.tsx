@@ -63,7 +63,8 @@ export function CustomerHistoryDialog({
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>产品</TableHead>
+                  <TableHead>物品</TableHead>
+                  <TableHead>类型</TableHead>
                   <TableHead className="text-right">成交价</TableHead>
                   <TableHead>付款方式</TableHead>
                   <TableHead>成交时间</TableHead>
@@ -73,7 +74,16 @@ export function CustomerHistoryDialog({
                 {sales.map((s) => (
                   <TableRow key={s.id}>
                     <TableCell className="font-medium">
-                      {s.products?.name ?? "已删除产品"}
+                      {s.products?.name ??
+                        s.loose_stones?.material ??
+                        "已删除记录"}
+                    </TableCell>
+                    <TableCell>
+                      {s.loose_stones ? (
+                        <span className="text-blue-600">裸石</span>
+                      ) : (
+                        "产品"
+                      )}
                     </TableCell>
                     <TableCell className="text-right text-amber-700">
                       {formatCurrency(s.sale_price)}

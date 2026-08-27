@@ -133,6 +133,13 @@ export default function LoansPage() {
                         >
                           {l.products.name}
                         </Link>
+                      ) : l.loose_stones ? (
+                        <Link
+                          href={`/loose-stones/${l.loose_stones.id}/view`}
+                          className="block truncate font-medium text-amber-700"
+                        >
+                          {itemName(l)}
+                        </Link>
                       ) : (
                         <p className="truncate font-medium text-gray-900">
                           {itemName(l)}
@@ -226,6 +233,13 @@ export default function LoansPage() {
                             className="text-amber-700 hover:underline"
                           >
                             {l.products.name}
+                          </Link>
+                        ) : l.loose_stones ? (
+                          <Link
+                            href={`/loose-stones/${l.loose_stones.id}/view`}
+                            className="text-amber-700 hover:underline"
+                          >
+                            {itemName(l)}
                           </Link>
                         ) : (
                           itemName(l)

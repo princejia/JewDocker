@@ -227,9 +227,16 @@ export default async function SalesPage({
                       >
                         {s.products.name}
                       </Link>
+                    ) : s.loose_stones ? (
+                      <Link
+                        href={`/loose-stones/${s.loose_stones.id}/view`}
+                        className="block truncate font-medium text-amber-700"
+                      >
+                        {s.loose_stones.material ?? "裸石"}
+                      </Link>
                     ) : (
                       <p className="truncate font-medium text-gray-900">
-                        {s.loose_stones?.material ?? "已删除记录"}
+                        已删除记录
                       </p>
                     )}
                     <p className="mt-0.5 text-xs text-gray-500">
@@ -319,8 +326,15 @@ export default async function SalesPage({
                       >
                         {s.products.name}
                       </Link>
+                    ) : s.loose_stones ? (
+                      <Link
+                        href={`/loose-stones/${s.loose_stones.id}/view`}
+                        className="text-amber-700 hover:underline"
+                      >
+                        {s.loose_stones.material ?? "裸石"}
+                      </Link>
                     ) : (
-                      (s.loose_stones?.material ?? "已删除记录")
+                      "已删除记录"
                     )}
                   </TableCell>
                   <TableCell>
