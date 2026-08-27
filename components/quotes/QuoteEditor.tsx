@@ -142,6 +142,7 @@ export function QuoteEditor({ quote }: { quote: QuoteWithItems }) {
   function selectProduct(id: string) {
     setProductId(id);
     setPickerOpen(false);
+    setPreview(null);
     const p = pickList.find((x) => x.id === id)?.product;
     if (p) setForm(quoteItemFormFromProduct(p));
   }
@@ -313,6 +314,14 @@ export function QuoteEditor({ quote }: { quote: QuoteWithItems }) {
                           key={it.id}
                           type="button"
                           onClick={() => selectProduct(it.id)}
+                          onMouseEnter={(e) =>
+                            setPreview({
+                              product: it.product,
+                              x: e.clientX,
+                              y: e.clientY,
+                            })
+                          }
+                          onMouseLeave={() => setPreview(null)}
                           className={cn(
                             "flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-amber-50",
                             productId === it.id && "bg-amber-100",
