@@ -11,7 +11,7 @@ export async function GET(
   const { data, error } = await supabase
     .from("quotes")
     .select(
-      "*, quote_items(*, products(id, code, name, price, sale_status))",
+      "*, quote_items(*, products(id, code, name, price, sale_status, image_urls, total_weight, weight_unit, size, inlaid_stones, gemstone_category, function_category))",
     )
     .eq("id", params.id)
     .single();

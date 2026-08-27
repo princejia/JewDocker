@@ -5,8 +5,20 @@ import { createPortal } from "react-dom";
 import { Product } from "@/types";
 import { categoryLabel } from "@/lib/constants";
 
+export type PreviewProduct = Pick<
+  Product,
+  | "name"
+  | "image_urls"
+  | "total_weight"
+  | "weight_unit"
+  | "size"
+  | "inlaid_stones"
+  | "gemstone_category"
+  | "function_category"
+>;
+
 export interface HoverPreview {
-  product: Product;
+  product: PreviewProduct;
   x: number;
   y: number;
 }

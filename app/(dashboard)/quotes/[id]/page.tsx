@@ -13,7 +13,9 @@ export default async function QuoteDetailPage({
   const supabase = createServerClient();
   const { data } = await supabase
     .from("quotes")
-    .select("*, quote_items(*, products(id, code, name, price, sale_status))")
+    .select(
+      "*, quote_items(*, products(id, code, name, price, sale_status, image_urls, total_weight, weight_unit, size, inlaid_stones, gemstone_category, function_category))",
+    )
     .eq("id", params.id)
     .single();
 

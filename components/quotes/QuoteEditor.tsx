@@ -7,6 +7,10 @@ import { ArrowLeft, ChevronDown, Pencil, Trash2 } from "lucide-react";
 import { Product, QuoteItemWithProduct, QuoteWithItems } from "@/types";
 import { formatCurrency, formatDateTime, formatProductCode, cn } from "@/lib/utils";
 import { isGoldCategory } from "@/lib/constants";
+import {
+  ProductHoverPreview,
+  type HoverPreview,
+} from "@/components/products/ProductHoverPreview";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -66,6 +70,7 @@ export function QuoteEditor({ quote }: { quote: QuoteWithItems }) {
   const [error, setError] = useState<string | null>(null);
 
   const [busyItemId, setBusyItemId] = useState<string | null>(null);
+  const [preview, setPreview] = useState<HoverPreview | null>(null);
   const [editTarget, setEditTarget] = useState<QuoteItemWithProduct | null>(
     null,
   );
@@ -423,15 +428,22 @@ export function QuoteEditor({ quote }: { quote: QuoteWithItems }) {
                   </TableCell>
                   <TableCell className="font-medium">
                     {item.products ? (
-                      <Link
-                        href={`/products/${item.products.id}/view`}
-                        className="text-amber-700 hover:underline"
+                      <span
+                        className="cursor-default"
+                        onMouseEnter={(e) =>
+                          setPreview({
+                            product: item.products!,
+                            x: e.clientX,
+                            y: e.clientY,
+                          })
+                        }
+                        onMouseLeave={() => setPreview(null)}
                       >
                         <span className="mr-2 font-mono text-xs text-gray-500">
                           {item.products.code}
                         </span>
                         {item.products.name}
-                      </Link>
+                      </span>
                     ) : (
                       "已删除产品"
                     )}
@@ -492,6 +504,8 @@ export function QuoteEditor({ quote }: { quote: QuoteWithItems }) {
         item={editTarget}
         onOpenChange={(o) => !o && setEditTarget(null)}
       />
+
+      {preview && <ProductHoverPreview {...preview} />}
 
       <ConfirmDialog
         open={!!deleteTarget}

@@ -215,7 +215,18 @@ export interface QuoteItem {
 export interface QuoteItemWithProduct extends QuoteItem {
   products?: Pick<
     Product,
-    "id" | "code" | "name" | "price" | "sale_status"
+    | "id"
+    | "code"
+    | "name"
+    | "price"
+    | "sale_status"
+    | "image_urls"
+    | "total_weight"
+    | "weight_unit"
+    | "size"
+    | "inlaid_stones"
+    | "gemstone_category"
+    | "function_category"
   > | null;
 }
 
