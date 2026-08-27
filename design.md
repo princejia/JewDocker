@@ -111,6 +111,8 @@
 | customer_id | 客户ID | UUID FK | 关联 customers.id，可为空 |
 | sale_price | 成交价格 | DECIMAL(12,2) | 实际成交金额 |
 | payment_method | 付款方式 | VARCHAR(50) | 现金/微信/支付宝/银行转账/信用卡 |
+| quote_item_id | 报价明细ID | UUID FK | 关联 quote_items.id，只有由报价转入的销售才有值 |
+| notes | 备注 | TEXT | 销售备注，由报价转入时自动写「由报价转入」 |
 | sold_at | 成交时间 | DATE | 实际售出日期 |
 | created_at | 记录时间 | TIMESTAMPTZ | 自动设置 |
 
@@ -192,7 +194,48 @@
 
 > 关联产品用数组而非中间表：一次写入即完成，避免跨表非事务写入的半成品数据。产品被删除后数组中的 id 会成为悬空引用，列表页显示为「已删除产品」。
 
-### 2.8 SQL 建表语句
+### 2.8 关联表：quotes / quote_items（报价单与报价明细）
+
+一个客户一张报价单，一件产品一条明细；明细确认后可单条转为销售记录。
+
+**quotes（报价单）**
+
+| 字段名 | 中文名 | 类型 | 说明 |
+|--------|--------|------|------|
+| id | 主键 | UUID | 唯一标识 |
+| customer_id | 客户ID | UUID FK | 关联 customers.id，按客户名自动复用或新建后回写 |
+| customer_name | 客户名称 | VARCHAR(100) | 必填，手输，带已有客户名联想 |
+| notes | 备注 | TEXT | 可选填 |
+| created_at | 报价时间 | TIMESTAMPTZ | 列表按此倒序 |
+| updated_at | 更新时间 | TIMESTAMPTZ | 触发器自动维护 |
+
+**quote_items（报价明细）**
+
+| 字段名 | 中文名 | 类型 | 说明 |
+|--------|--------|------|------|
+| id | 主键 | UUID | 唯一标识 |
+| code | 报价编号 | VARCHAR(20) | 触发器自动发号，`Q + 北京时间年月日时分秒`，全表唯一 |
+| quote_id | 报价单ID | UUID FK | 关联 quotes.id，级联删除 |
+| product_id | 产品ID | UUID FK | 关联 products.id，产品被删时置空 |
+| is_gold | 是否黄金 | BOOLEAN | 决定采用哪套计价公式 |
+| weight | 克重 | DECIMAL(12,3) | 从产品带入，可改 |
+| list_price | 产品金额 | DECIMAL(12,2) | 非黄金计价用，从售价带入 |
+| discount | 折扣 | DECIMAL(6,4) | 非黄金计价用的乘数，0.85 = 85 折 |
+| labor_price | 工费销售价格 | DECIMAL(12,2) | g/元，从产品档案带入 |
+| labor_discount | 工费销售折扣 | DECIMAL(6,4) | 乘数 |
+| labor_subtotal | 工费小计 | DECIMAL(12,2) | 服务端算出的快照 |
+| surcharge | 附加费 | DECIMAL(12,2) | 一笔总额，从产品档案带入 |
+| surcharge_discount | 附加费折扣 | DECIMAL(6,4) | 乘数 |
+| surcharge_subtotal | 附加费小计 | DECIMAL(12,2) | 服务端算出的快照 |
+| gold_price | 当日金价 | DECIMAL(12,2) | g/元，每次报价现填 |
+| gold_subtotal | 金价小计 | DECIMAL(12,2) | 当日金价 × 克重 |
+| quoted_price | 销售价格 | DECIMAL(12,2) | 最终报价，由 `computeQuotePricing()` 统一算出 |
+| sale_id | 销售记录ID | UUID FK | 关联 product_sales.id，有值即表示已转销售 |
+| created_at | 创建时间 | TIMESTAMPTZ | 明细按此升序展示 |
+
+> **各项小计与总价均为写入时的快照**，不随产品档案后续修改而变；服务端只接收原始输入并重算，不信任客户端传来的金额。`quote_items.sale_id` 与 `product_sales.quote_item_id` 互相回写，两个方向都能查。
+
+### 2.9 SQL 建表语句
 
 在 Supabase SQL Editor 中执行：
 
@@ -585,6 +628,7 @@ jewelry-system/
 - **客户自动建档**：报价单填入的客户名称在服务端按同名复用，找不到就自动在【客户管理】里建一条客户记录并回写 `customer_id`，不需要手动先建客户；改客户名时同样重新关联
 - **删除报价单**：列表每行（手机端卡片右上角）提供删除，二次确认；明细随报价单级联删除，已转出的销售记录不受影响
 - **报价详情页**：可修改客户名称；选取在库产品（可按编号/名称搜索，接口单页上限 100，逐页拉全）后展示名称、重量、销售价格、宝石分类，填完计价字段点【保存】生成一条报价记录，可继续选其他产品继续报
+- **报价记录悬停预览**：明细表里的产品**不可点击跳转**，鼠标移上去弹出跟随光标的详情卡片（复用 `ProductHoverPreview`）
 - **非黄金计价**：产品金额（自动带入售价，可改）× 折扣 = 报价金额
 - **黄金计价**（宝石分类为「黄金」时自动切换）：工费销售价格与附加费自动带入产品档案，各配一个折扣输入；
   - 工费小计 = 工费销售价格(g/元) × 克重 × 工费销售折扣
@@ -595,7 +639,7 @@ jewelry-system/
 - **报价编号**：每条报价记录由数据库触发器自动发号，格式 `Q` + 北京时间 YYYYMMDDHH24MISS，与产品 `P`、裸石 `L` 共用发号表 `record_code_seq`，唯一索引兜底
 - **修改报价**：未转销售的记录可点铅笔图标弹窗修改计价（与新增同一套字段），保存后服务端重算各项小计与总价；已转销售的记录不可修改或删除
 - **转为销售**：每条报价记录旁有【转为销售】按钮，客户确认价格后点击，按报价金额写入 `product_sales`（备注「由报价转入」），同步把产品置为【已售】，并互相回写 `sale_id` / `quote_item_id`；已转的记录不可重复转
-- **从销售反查报价**：销售记录页新增「报价编号」列（手机端为卡片上的琥珀色徒章），点击跳回 `/quotes/<quote_id>?item=<id>`，对应那条报价行会高亮
+- **从销售反查报价**：销售记录页新增「报价编号」列（手机端为卡片上的琥珀色徽章），点击跳回 `/quotes/<quote_id>?item=<id>`，对应那条报价行会高亮；该关联由独立查询完成，报价表未迁移时不会影响流水列表本身
 - **客户关联**：报价单只存客户名，转销售时按同名客户复用，没有则自动建一个客户档案
 - **服务端校验**：产品已删除、不在库、或存在未归还借调记录时拒绝转销售并提示
 
@@ -723,6 +767,15 @@ jewelry-system/
 | POST | /api/sales | 创建销售记录 | 物品为产品或裸石，同时更新其销售状态与出售价；**借调中的物品拒绝出售** |
 | PATCH | /api/sales/[id] | 修改销售记录 | 同步回写物品成交价/状态/时间 |
 | DELETE | /api/sales/[id] | 删除销售记录 | 物品恢复为【在库】 |
+| GET | /api/quotes | 报价单列表 | 含明细摘要，按报价时间倒序 |
+| POST | /api/quotes | 新建报价单 | 客户名按同名复用，找不到自动建档 |
+| GET | /api/quotes/[id] | 报价单详情 | 含明细与产品信息 |
+| PATCH | /api/quotes/[id] | 更新报价单 | 改客户名时重新关联客户 |
+| DELETE | /api/quotes/[id] | 删除报价单 | 明细级联删除，已转出的销售不受影响 |
+| POST | /api/quote-items | 新增报价记录 | 只接收原始输入，小计与总价服务端重算 |
+| PATCH | /api/quote-items/[id] | 修改报价记录 | 合并旧值后重算；已转销售的拒绝 |
+| DELETE | /api/quote-items/[id] | 删除报价记录 | 已转销售的拒绝 |
+| POST | /api/quote-items/[id]/convert | 转为销售 | 写入 product_sales、产品置为已售、互相回写关联 |
 | GET | /api/customers | 客户列表 | |
 | POST | /api/customers | 创建客户 | |
 | PATCH | /api/customers/[id] | 更新客户 | 部分更新 |
