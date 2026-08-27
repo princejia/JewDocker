@@ -56,7 +56,7 @@ export function productPublicView(p: Product): PublicItemView {
         label: "工费",
         value: p.labor_sale_price ? `¥${p.labor_sale_price}/g` : null,
       },
-      { label: "附加费", value: p.surcharge ? `¥${p.surcharge}/g` : null },
+      { label: "附加费", value: p.surcharge ? `¥${p.surcharge}` : null },
     ]),
   };
 }

@@ -78,7 +78,7 @@ export default async function ProductViewPage({
                 : null,
           },
           {
-            label: "附加费 (g/元)",
+            label: "附加费 (元)",
             value:
               product.surcharge != null
                 ? formatCurrency(product.surcharge)

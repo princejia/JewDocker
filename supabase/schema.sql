@@ -194,7 +194,7 @@ ALTER TABLE loose_stones ADD COLUMN IF NOT EXISTS sale_status      sale_status_e
 ALTER TABLE products ADD COLUMN IF NOT EXISTS supplier          VARCHAR(100);
 ALTER TABLE products ADD COLUMN IF NOT EXISTS labor_sale_price  DECIMAL(12,2) DEFAULT 0; -- 工费销售价格 g/元
 ALTER TABLE products ADD COLUMN IF NOT EXISTS labor_cost        DECIMAL(12,2) DEFAULT 0; -- 工费成本 g/元
-ALTER TABLE products ADD COLUMN IF NOT EXISTS surcharge         DECIMAL(12,2) DEFAULT 0; -- 附加费 g/元
+ALTER TABLE products ADD COLUMN IF NOT EXISTS surcharge         DECIMAL(12,2) DEFAULT 0; -- 附加费，一笔总额
 ALTER TABLE products ADD COLUMN IF NOT EXISTS purchase_discount DECIMAL(12,4) DEFAULT 1; -- 买入折扣
 
 -- 销售记录支持裸石（product_id 已可空，新增 loose_stone_id）

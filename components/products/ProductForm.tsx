@@ -405,7 +405,7 @@ export function ProductForm({ initial }: ProductFormProps) {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="surcharge">附加费 (g/元)</Label>
+              <Label htmlFor="surcharge">附加费 (元)</Label>
               <NumberInput
                 id="surcharge"
                 step="0.01"

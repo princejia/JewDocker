@@ -23,7 +23,7 @@ export interface Product {
   labor_sale_price: number | null;
   /** 工费成本 g/元（黄金专用） */
   labor_cost: number | null;
-  /** 附加费 g/元（黄金专用） */
+  /** 附加费，一笔总额（黄金专用） */
   surcharge: number | null;
   /** 买入折扣（黄金专用） */
   purchase_discount: number | null;

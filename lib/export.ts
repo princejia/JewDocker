@@ -101,7 +101,7 @@ export async function exportProductsToExcel(
     { header: "出售价(¥)", key: "sale_price", width: 12 },
     { header: "工费销售价格(g/元)", key: "labor_sale_price", width: 16 },
     { header: "工费成本(g/元)", key: "labor_cost", width: 14 },
-    { header: "附加费(g/元)", key: "surcharge", width: 14 },
+    { header: "附加费(元)", key: "surcharge", width: 14 },
     { header: "买入折扣", key: "purchase_discount", width: 10 },
     { header: "重量", key: "total_weight", width: 12 },
     { header: "单位", key: "weight_unit", width: 10 },
