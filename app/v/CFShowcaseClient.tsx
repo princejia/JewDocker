@@ -474,7 +474,7 @@ export function CFShowcaseClient({
               <p className="mt-1 text-base">{activeItem.name}</p>
 
               {activeItem.price > 0 && (
-                <p className="mt-2 text-2xl font-semibold text-[var(--sc-accent)]">
+                <p className="mt-2 text-2xl font-semibold text-white">
                   ¥{activeItem.price.toLocaleString()}
                 </p>
               )}
