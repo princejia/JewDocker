@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase-server";
+import { computeQuotePricing } from "@/lib/quotes";
 import { quoteItemUpdateSchema } from "@/lib/validations";
 
 export async function PATCH(
@@ -20,19 +21,25 @@ export async function PATCH(
 
   const { data: existing } = await supabase
     .from("quote_items")
-    .select("sale_id")
+    .select("*")
     .eq("id", params.id)
     .single();
-  if (existing?.sale_id) {
+  if (!existing) {
+    return NextResponse.json({ error: "报价记录不存在" }, { status: 404 });
+  }
+  if (existing.sale_id) {
     return NextResponse.json(
       { error: "该报价已转为销售，不能再修改" },
       { status: 400 },
     );
   }
 
+  const merged = { ...existing, ...parsed.data };
+  const pricing = computeQuotePricing(merged);
+
   const { data, error } = await supabase
     .from("quote_items")
-    .update(parsed.data)
+    .update({ ...parsed.data, ...pricing })
     .eq("id", params.id)
     .select("*, products(id, code, name, price, sale_status)")
     .single();

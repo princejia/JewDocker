@@ -6,6 +6,8 @@ import Link from "next/link";
 import { ArrowLeft, ChevronDown, Trash2 } from "lucide-react";
 import { Product, QuoteItemWithProduct, QuoteWithItems } from "@/types";
 import { formatCurrency, formatDateTime, formatProductCode, cn } from "@/lib/utils";
+import { isGoldCategory } from "@/lib/constants";
+import { computeQuotePricing } from "@/lib/quotes";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,9 +21,24 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-type PickItem = { id: string; code: string; name: string; price: number };
+type PickItem = {
+  id: string;
+  code: string;
+  name: string;
+  price: number;
+  product: Product;
+};
 
-const round2 = (n: number) => Math.round(n * 100) / 100;
+function pricingDetail(item: QuoteItemWithProduct): string {
+  if (!item.is_gold) {
+    return `${formatCurrency(item.list_price)} × ${Number(item.discount)}`;
+  }
+  return [
+    `金价 ${formatCurrency(item.gold_subtotal ?? 0)}`,
+    `工费 ${formatCurrency(item.labor_subtotal ?? 0)}`,
+    `附加费 ${formatCurrency(item.surcharge_subtotal ?? 0)}`,
+  ].join(" + ");
+}
 
 export function QuoteEditor({ quote }: { quote: QuoteWithItems }) {
   const router = useRouter();
@@ -37,6 +54,12 @@ export function QuoteEditor({ quote }: { quote: QuoteWithItems }) {
 
   const [listPrice, setListPrice] = useState("");
   const [discount, setDiscount] = useState("1");
+  const [weight, setWeight] = useState("");
+  const [laborPrice, setLaborPrice] = useState("");
+  const [laborDiscount, setLaborDiscount] = useState("1");
+  const [surcharge, setSurcharge] = useState("");
+  const [surchargeDiscount, setSurchargeDiscount] = useState("1");
+  const [goldPrice, setGoldPrice] = useState("");
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -90,6 +113,7 @@ export function QuoteEditor({ quote }: { quote: QuoteWithItems }) {
     code: p.code ?? formatProductCode("P", p.created_at),
     name: p.name,
     price: Number(p.price),
+    product: p,
   }));
 
   const kw = query.trim().toLowerCase();
@@ -102,14 +126,46 @@ export function QuoteEditor({ quote }: { quote: QuoteWithItems }) {
     : pickList;
 
   const selected = pickList.find((it) => it.id === productId) ?? null;
+  const isGold = isGoldCategory(selected?.product.gemstone_category);
 
-  const amount = round2(Number(listPrice || 0) * Number(discount || 0));
+  const pricing = computeQuotePricing({
+    is_gold: isGold,
+    weight: Number(weight || 0),
+    list_price: Number(listPrice || 0),
+    discount: Number(discount || 0),
+    labor_price: Number(laborPrice || 0),
+    labor_discount: Number(laborDiscount || 0),
+    surcharge: Number(surcharge || 0),
+    surcharge_discount: Number(surchargeDiscount || 0),
+    gold_price: Number(goldPrice || 0),
+  });
+
+  function resetForm() {
+    setProductId("");
+    setQuery("");
+    setListPrice("");
+    setDiscount("1");
+    setWeight("");
+    setLaborPrice("");
+    setLaborDiscount("1");
+    setSurcharge("");
+    setSurchargeDiscount("1");
+    setGoldPrice("");
+  }
 
   function selectProduct(id: string) {
     setProductId(id);
     setPickerOpen(false);
-    const p = pickList.find((x) => x.id === id);
-    if (p) setListPrice(String(p.price));
+    const p = pickList.find((x) => x.id === id)?.product;
+    if (!p) return;
+    setListPrice(String(p.price ?? ""));
+    setDiscount("1");
+    setWeight(p.total_weight != null ? String(p.total_weight) : "");
+    setLaborPrice(p.labor_sale_price != null ? String(p.labor_sale_price) : "");
+    setLaborDiscount("1");
+    setSurcharge(p.surcharge != null ? String(p.surcharge) : "");
+    setSurchargeDiscount("1");
+    setGoldPrice("");
   }
 
   async function saveCustomerName() {
@@ -130,6 +186,10 @@ export function QuoteEditor({ quote }: { quote: QuoteWithItems }) {
       setError("请选择产品");
       return;
     }
+    if (isGold && !Number(goldPrice || 0)) {
+      setError("请输入当日金价");
+      return;
+    }
     setAdding(true);
     const res = await fetch("/api/quote-items", {
       method: "POST",
@@ -137,21 +197,24 @@ export function QuoteEditor({ quote }: { quote: QuoteWithItems }) {
       body: JSON.stringify({
         quote_id: quote.id,
         product_id: productId,
+        is_gold: isGold,
+        weight: Number(weight || 0),
         list_price: Number(listPrice || 0),
         discount: Number(discount || 0),
-        quoted_price: amount,
+        labor_price: Number(laborPrice || 0),
+        labor_discount: Number(laborDiscount || 0),
+        surcharge: Number(surcharge || 0),
+        surcharge_discount: Number(surchargeDiscount || 0),
+        gold_price: Number(goldPrice || 0),
       }),
     });
     setAdding(false);
     if (!res.ok) {
       const json = await res.json().catch(() => ({}));
-      setError(json.error || "报价失败");
+      setError(json.error || "保存失败");
       return;
     }
-    setProductId("");
-    setQuery("");
-    setListPrice("");
-    setDiscount("1");
+    resetForm();
     router.refresh();
   }
 
@@ -226,9 +289,9 @@ export function QuoteEditor({ quote }: { quote: QuoteWithItems }) {
 
       <div className="rounded-xl border bg-white p-4">
         <h2 className="text-base font-semibold text-gray-900">添加报价</h2>
-        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,2fr)_repeat(3,minmax(0,1fr))_auto] md:items-end">
+        <div className="mt-4 space-y-4">
           <div
-            className="space-y-2"
+            className="space-y-2 md:max-w-lg"
             ref={pickerRef}
             onKeyDown={(e) => {
               if (e.key === "Escape" && pickerOpen) {
@@ -299,44 +362,181 @@ export function QuoteEditor({ quote }: { quote: QuoteWithItems }) {
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="list-price">产品金额</Label>
-            <Input
-              id="list-price"
-              type="number"
-              inputMode="decimal"
-              value={listPrice}
-              onChange={(e) => setListPrice(e.target.value)}
-            />
-          </div>
+          {selected && (
+            <>
+              <dl className="grid grid-cols-2 gap-3 rounded-lg bg-gray-50 p-3 text-sm sm:grid-cols-4">
+                <div>
+                  <dt className="text-xs text-gray-400">名称</dt>
+                  <dd className="mt-0.5 font-medium text-gray-800">
+                    {selected.name}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-gray-400">重量</dt>
+                  <dd className="mt-0.5 font-medium text-gray-800">
+                    {selected.product.total_weight != null
+                      ? `${selected.product.total_weight}${selected.product.weight_unit || "g"}`
+                      : "-"}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-gray-400">销售价格</dt>
+                  <dd className="mt-0.5 font-medium text-gray-800">
+                    {formatCurrency(selected.price)}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-gray-400">宝石分类</dt>
+                  <dd className="mt-0.5 font-medium text-gray-800">
+                    {selected.product.gemstone_category || "-"}
+                  </dd>
+                </div>
+              </dl>
 
-          <div className="space-y-2">
-            <Label htmlFor="discount">折扣</Label>
-            <Input
-              id="discount"
-              type="number"
-              inputMode="decimal"
-              step="0.01"
-              value={discount}
-              onChange={(e) => setDiscount(e.target.value)}
-              placeholder="0.85 = 85 折"
-            />
-          </div>
+              {isGold ? (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                    <div className="space-y-2">
+                      <Label htmlFor="labor-price">工费销售价格 (g/元)</Label>
+                      <Input
+                        id="labor-price"
+                        type="number"
+                        inputMode="decimal"
+                        value={laborPrice}
+                        onChange={(e) => setLaborPrice(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="labor-discount">工费销售折扣</Label>
+                      <Input
+                        id="labor-discount"
+                        type="number"
+                        inputMode="decimal"
+                        step="0.01"
+                        value={laborDiscount}
+                        onChange={(e) => setLaborDiscount(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>工费小计</Label>
+                      <div className="flex h-10 items-center rounded-md border border-input bg-gray-50 px-3 text-sm text-gray-800">
+                        {formatCurrency(pricing.labor_subtotal)}
+                      </div>
+                    </div>
+                  </div>
 
-          <div className="space-y-2">
-            <Label>报价金额</Label>
-            <div className="flex h-10 items-center rounded-md border border-input bg-gray-50 px-3 text-sm font-semibold text-amber-700">
-              {formatCurrency(amount)}
-            </div>
-          </div>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                    <div className="space-y-2">
+                      <Label htmlFor="surcharge">附加费 (元)</Label>
+                      <Input
+                        id="surcharge"
+                        type="number"
+                        inputMode="decimal"
+                        value={surcharge}
+                        onChange={(e) => setSurcharge(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="surcharge-discount">附加费折扣</Label>
+                      <Input
+                        id="surcharge-discount"
+                        type="number"
+                        inputMode="decimal"
+                        step="0.01"
+                        value={surchargeDiscount}
+                        onChange={(e) => setSurchargeDiscount(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>附加费小计</Label>
+                      <div className="flex h-10 items-center rounded-md border border-input bg-gray-50 px-3 text-sm text-gray-800">
+                        {formatCurrency(pricing.surcharge_subtotal)}
+                      </div>
+                    </div>
+                  </div>
 
-          <Button onClick={addItem} disabled={adding}>
-            {adding ? "报价中..." : "报价"}
-          </Button>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                    <div className="space-y-2">
+                      <Label htmlFor="gold-price">当日金价 (g/元) *</Label>
+                      <Input
+                        id="gold-price"
+                        type="number"
+                        inputMode="decimal"
+                        value={goldPrice}
+                        onChange={(e) => setGoldPrice(e.target.value)}
+                        placeholder="按克计价"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="weight">克重</Label>
+                      <Input
+                        id="weight"
+                        type="number"
+                        inputMode="decimal"
+                        value={weight}
+                        onChange={(e) => setWeight(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>金价小计</Label>
+                      <div className="flex h-10 items-center rounded-md border border-input bg-gray-50 px-3 text-sm text-gray-800">
+                        {formatCurrency(pricing.gold_subtotal)}
+                      </div>
+                    </div>
+                  </div>
+
+                  <p className="text-xs text-gray-400">
+                    工费小计 = 工费销售价格 × 克重 × 工费销售折扣；附加费小计 =
+                    附加费 × 附加费折扣；金价小计 = 当日金价 × 克重
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="list-price">产品金额</Label>
+                    <Input
+                      id="list-price"
+                      type="number"
+                      inputMode="decimal"
+                      value={listPrice}
+                      onChange={(e) => setListPrice(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="discount">折扣</Label>
+                    <Input
+                      id="discount"
+                      type="number"
+                      inputMode="decimal"
+                      step="0.01"
+                      value={discount}
+                      onChange={(e) => setDiscount(e.target.value)}
+                      placeholder="0.85 = 85 折"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>报价金额</Label>
+                    <div className="flex h-10 items-center rounded-md border border-input bg-gray-50 px-3 text-sm text-gray-800">
+                      {formatCurrency(pricing.quoted_price)}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-3">
+                <p className="text-sm text-gray-500">
+                  销售价格{" "}
+                  <span className="ml-1 text-xl font-bold text-amber-700">
+                    {formatCurrency(pricing.quoted_price)}
+                  </span>
+                </p>
+                <Button onClick={addItem} disabled={adding}>
+                  {adding ? "保存中..." : "保存"}
+                </Button>
+              </div>
+            </>
+          )}
         </div>
-        <p className="mt-2 text-xs text-gray-400">
-          折扣为乘数：1 = 原价，0.85 = 85 折
-        </p>
         {error && <p className="mt-2 text-sm text-red-500">{error}</p>}
       </div>
 
@@ -354,9 +554,8 @@ export function QuoteEditor({ quote }: { quote: QuoteWithItems }) {
           <TableHeader>
             <TableRow>
               <TableHead>产品</TableHead>
-              <TableHead className="text-right">产品金额</TableHead>
-              <TableHead className="text-right">折扣</TableHead>
-              <TableHead className="text-right">报价金额</TableHead>
+              <TableHead>计价明细</TableHead>
+              <TableHead className="text-right">销售价格</TableHead>
               <TableHead>状态</TableHead>
               <TableHead className="text-right">操作</TableHead>
             </TableRow>
@@ -364,7 +563,7 @@ export function QuoteEditor({ quote }: { quote: QuoteWithItems }) {
           <TableBody>
             {items.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center text-gray-400">
+                <TableCell colSpan={5} className="text-center text-gray-400">
                   还没有报价记录
                 </TableCell>
               </TableRow>
@@ -386,11 +585,8 @@ export function QuoteEditor({ quote }: { quote: QuoteWithItems }) {
                       "已删除产品"
                     )}
                   </TableCell>
-                  <TableCell className="text-right text-gray-600">
-                    {formatCurrency(item.list_price)}
-                  </TableCell>
-                  <TableCell className="text-right text-gray-600">
-                    {Number(item.discount)}
+                  <TableCell className="text-sm text-gray-600">
+                    {pricingDetail(item)}
                   </TableCell>
                   <TableCell className="text-right font-medium text-amber-700">
                     {formatCurrency(item.quoted_price)}

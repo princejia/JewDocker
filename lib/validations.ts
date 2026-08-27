@@ -129,13 +129,24 @@ export type QuoteSchema = z.infer<typeof quoteSchema>;
 export const quoteItemSchema = z.object({
   quote_id: z.string().uuid(),
   product_id: z.string().uuid(),
-  list_price: z.coerce.number().nonnegative(),
-  discount: z.coerce.number().positive().max(10),
-  quoted_price: z.coerce.number().nonnegative(),
+  is_gold: z.boolean().default(false),
+  weight: z.coerce.number().nonnegative().nullable().optional(),
+  list_price: z.coerce.number().nonnegative().default(0),
+  discount: z.coerce.number().nonnegative().max(10).default(1),
+  labor_price: z.coerce.number().nonnegative().nullable().optional(),
+  labor_discount: z.coerce.number().nonnegative().max(10).nullable().optional(),
+  surcharge: z.coerce.number().nonnegative().nullable().optional(),
+  surcharge_discount: z.coerce
+    .number()
+    .nonnegative()
+    .max(10)
+    .nullable()
+    .optional(),
+  gold_price: z.coerce.number().nonnegative().nullable().optional(),
 });
 
 export type QuoteItemSchema = z.infer<typeof quoteItemSchema>;
 
 export const quoteItemUpdateSchema = quoteItemSchema
-  .pick({ list_price: true, discount: true, quoted_price: true })
+  .omit({ quote_id: true, product_id: true })
   .partial();

@@ -189,6 +189,16 @@ export interface QuoteItem {
   /** 折扣乘数，0.85 = 85 折 */
   discount: number;
   quoted_price: number;
+  is_gold: boolean;
+  weight: number | null;
+  labor_price: number | null;
+  labor_discount: number | null;
+  labor_subtotal: number | null;
+  surcharge: number | null;
+  surcharge_discount: number | null;
+  surcharge_subtotal: number | null;
+  gold_price: number | null;
+  gold_subtotal: number | null;
   sale_id: string | null;
   created_at: string;
 }

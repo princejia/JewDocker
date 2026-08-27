@@ -267,6 +267,18 @@ CREATE TABLE IF NOT EXISTS quote_items (
 CREATE INDEX IF NOT EXISTS idx_quote_items_quote ON quote_items(quote_id);
 CREATE INDEX IF NOT EXISTS idx_quote_items_product ON quote_items(product_id);
 
+-- 黄金分类的报价按「工费小计 + 附加费小计 + 金价小计」展开，各项快照存在明细里（幂等）
+ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS is_gold            BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS weight             DECIMAL(12,3);  -- 克重
+ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS labor_price        DECIMAL(12,2);  -- 工费销售价格 g/元
+ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS labor_discount     DECIMAL(6,4);
+ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS labor_subtotal     DECIMAL(12,2);
+ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS surcharge          DECIMAL(12,2);  -- 附加费，一笔总额
+ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS surcharge_discount DECIMAL(6,4);
+ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS surcharge_subtotal DECIMAL(12,2);
+ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS gold_price         DECIMAL(12,2);  -- 当日金价 g/元
+ALTER TABLE quote_items ADD COLUMN IF NOT EXISTS gold_subtotal      DECIMAL(12,2);
+
 -- ------------------------------------------------------------
 -- 自动更新 updated_at 触发器
 -- ------------------------------------------------------------
