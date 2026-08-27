@@ -239,6 +239,35 @@ CREATE TABLE IF NOT EXISTS recycles (
 CREATE INDEX IF NOT EXISTS idx_recycles_recycled_at ON recycles(recycled_at DESC);
 
 -- ------------------------------------------------------------
+-- 报价单（一个客户一张）与报价明细（一件产品一条）
+-- 明细转为销售后回写 sale_id，不重复转
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS quotes (
+  id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  customer_id   UUID REFERENCES customers(id) ON DELETE SET NULL,
+  customer_name VARCHAR(100) NOT NULL,
+  notes         TEXT,
+  created_at    TIMESTAMPTZ DEFAULT NOW(),
+  updated_at    TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_quotes_created_at ON quotes(created_at DESC);
+
+CREATE TABLE IF NOT EXISTS quote_items (
+  id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  quote_id     UUID NOT NULL REFERENCES quotes(id) ON DELETE CASCADE,
+  product_id   UUID REFERENCES products(id) ON DELETE SET NULL,
+  list_price   DECIMAL(12,2) NOT NULL DEFAULT 0, -- 产品原价
+  discount     DECIMAL(6,4)  NOT NULL DEFAULT 1, -- 折扣乘数，0.85 = 85 折
+  quoted_price DECIMAL(12,2) NOT NULL DEFAULT 0, -- 原价 × 折扣
+  sale_id      UUID REFERENCES product_sales(id) ON DELETE SET NULL,
+  created_at   TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_quote_items_quote ON quote_items(quote_id);
+CREATE INDEX IF NOT EXISTS idx_quote_items_product ON quote_items(product_id);
+
+-- ------------------------------------------------------------
 -- 自动更新 updated_at 触发器
 -- ------------------------------------------------------------
 CREATE OR REPLACE FUNCTION update_updated_at()
@@ -257,6 +286,11 @@ CREATE TRIGGER products_updated_at
 DROP TRIGGER IF EXISTS loose_stones_updated_at ON loose_stones;
 CREATE TRIGGER loose_stones_updated_at
   BEFORE UPDATE ON loose_stones
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+DROP TRIGGER IF EXISTS quotes_updated_at ON quotes;
+CREATE TRIGGER quotes_updated_at
+  BEFORE UPDATE ON quotes
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
 -- ------------------------------------------------------------
@@ -354,6 +388,8 @@ ALTER TABLE loose_stones ENABLE ROW LEVEL SECURITY;
 ALTER TABLE product_returns ENABLE ROW LEVEL SECURITY;
 ALTER TABLE item_loans ENABLE ROW LEVEL SECURITY;
 ALTER TABLE recycles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE quotes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE quote_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE record_code_seq ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Authenticated users can read products" ON products;
@@ -394,6 +430,16 @@ CREATE POLICY "Authenticated users can manage loans"
 DROP POLICY IF EXISTS "Authenticated users can manage recycles" ON recycles;
 CREATE POLICY "Authenticated users can manage recycles"
   ON recycles FOR ALL
+  TO authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Authenticated users can manage quotes" ON quotes;
+CREATE POLICY "Authenticated users can manage quotes"
+  ON quotes FOR ALL
+  TO authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Authenticated users can manage quote items" ON quote_items;
+CREATE POLICY "Authenticated users can manage quote items"
+  ON quote_items FOR ALL
   TO authenticated USING (true) WITH CHECK (true);
 
 -- ============================================================

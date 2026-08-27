@@ -117,3 +117,25 @@ export const recycleSchema = z.object({
 });
 
 export type RecycleSchema = z.infer<typeof recycleSchema>;
+
+export const quoteSchema = z.object({
+  customer_id: z.string().uuid().nullable().optional(),
+  customer_name: z.string().min(1, "客户名称必填").max(100),
+  notes: z.string().max(2000).nullable().optional(),
+});
+
+export type QuoteSchema = z.infer<typeof quoteSchema>;
+
+export const quoteItemSchema = z.object({
+  quote_id: z.string().uuid(),
+  product_id: z.string().uuid(),
+  list_price: z.coerce.number().nonnegative(),
+  discount: z.coerce.number().positive().max(10),
+  quoted_price: z.coerce.number().nonnegative(),
+});
+
+export type QuoteItemSchema = z.infer<typeof quoteItemSchema>;
+
+export const quoteItemUpdateSchema = quoteItemSchema
+  .pick({ list_price: true, discount: true, quoted_price: true })
+  .partial();

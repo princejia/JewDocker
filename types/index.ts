@@ -172,6 +172,38 @@ export interface ProductReturnWithRelations extends ProductReturn {
   customers?: Pick<Customer, "id" | "name"> | null;
 }
 
+export interface Quote {
+  id: string;
+  customer_id: string | null;
+  customer_name: string;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface QuoteItem {
+  id: string;
+  quote_id: string;
+  product_id: string | null;
+  list_price: number;
+  /** 折扣乘数，0.85 = 85 折 */
+  discount: number;
+  quoted_price: number;
+  sale_id: string | null;
+  created_at: string;
+}
+
+export interface QuoteItemWithProduct extends QuoteItem {
+  products?: Pick<
+    Product,
+    "id" | "code" | "name" | "price" | "sale_status"
+  > | null;
+}
+
+export interface QuoteWithItems extends Quote {
+  quote_items?: QuoteItemWithProduct[];
+}
+
 export interface PaginatedResponse<T> {
   data: T[];
   total: number;
