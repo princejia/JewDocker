@@ -47,13 +47,38 @@ export default async function SalesPage({
   const { data } = await supabase
     .from("product_sales")
     .select(
-      "*, products(id, code, name, image_urls, sale_status), customers(id, name), loose_stones(id, code, material, image_urls, sale_status), quote_items(id, code, quote_id)",
+      "*, products(id, code, name, image_urls, sale_status), customers(id, name), loose_stones(id, code, material, image_urls, sale_status)",
     )
     .order("sold_at", { ascending: false })
     .order("created_at", { ascending: false })
     .range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1);
 
   const sales = (data ?? []) as ProductSaleWithRelations[];
+
+  // 报价来源单独查：报价表未迁移时这里失败也不影响流水列表本身
+  if (sales.length) {
+    const { data: links } = await supabase
+      .from("quote_items")
+      .select("id, code, quote_id, sale_id")
+      .in(
+        "sale_id",
+        sales.map((s) => s.id),
+      );
+    const bySale = new Map(
+      ((links ?? []) as {
+        id: string;
+        code: string | null;
+        quote_id: string;
+        sale_id: string;
+      }[]).map((l) => [l.sale_id, l]),
+    );
+    for (const s of sales) {
+      const link = bySale.get(s.id);
+      s.quote_items = link
+        ? { id: link.id, code: link.code, quote_id: link.quote_id }
+        : null;
+    }
+  }
 
   const { data: returnsData } = await supabase
     .from("product_returns")
