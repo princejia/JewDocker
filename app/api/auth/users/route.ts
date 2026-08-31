@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createServerClient } from "@/lib/supabase-server";
 import { requireSuperAdmin, hashPassword, AppUser } from "@/lib/users";
+import { sanitizeMenuPerms } from "@/lib/menus";
 
 export const dynamic = "force-dynamic";
 
@@ -9,6 +10,7 @@ const createSchema = z.object({
   username: z.string().trim().min(1, "请输入用户名").max(100),
   password: z.string().min(6, "密码至少 6 位"),
   role: z.enum(["super_admin", "user"]).default("user"),
+  menu_perms: z.array(z.string()).nullable().optional(),
 });
 
 export async function GET() {
@@ -19,7 +21,7 @@ export async function GET() {
   const supabase = createServerClient();
   const { data } = await supabase
     .from("app_users")
-    .select("id, username, role, is_active, created_at")
+    .select("id, username, role, is_active, menu_perms, created_at")
     .order("created_at", { ascending: true });
   return NextResponse.json({ data: data ?? [] });
 }
@@ -55,8 +57,11 @@ export async function POST(req: Request) {
       username: parsed.data.username,
       password_hash,
       role: parsed.data.role,
+      menu_perms: parsed.data.menu_perms
+        ? sanitizeMenuPerms(parsed.data.menu_perms)
+        : null,
     })
-    .select("id, username, role, is_active, created_at")
+    .select("id, username, role, is_active, menu_perms, created_at")
     .single();
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });

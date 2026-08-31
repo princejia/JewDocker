@@ -481,8 +481,13 @@ CREATE TABLE IF NOT EXISTS app_users (
   password_hash TEXT NOT NULL,
   role          VARCHAR(20) NOT NULL DEFAULT 'user', -- super_admin / user
   is_active     BOOLEAN NOT NULL DEFAULT TRUE,
+  -- 可访问的菜单 key 列表（值见 lib/menus.ts）；NULL = 默认全部业务菜单
+  menu_perms    TEXT[],
   created_at    TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- 已有库补列（本文件仅在空库时自动执行一次，存量环境需手动跑）
+ALTER TABLE app_users ADD COLUMN IF NOT EXISTS menu_perms TEXT[];
 
 ALTER TABLE app_users ENABLE ROW LEVEL SECURITY;
 -- 不创建任何 policy：anon/authenticated 一律拒绝，只有 service_role 可读写。

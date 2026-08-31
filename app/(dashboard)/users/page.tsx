@@ -10,6 +10,7 @@ type UserRow = {
   username: string;
   role: string;
   is_active: boolean;
+  menu_perms: string[] | null;
   created_at: string;
 };
 
@@ -20,7 +21,7 @@ export default async function UsersPage() {
   const supabase = createServerClient();
   const { data } = await supabase
     .from("app_users")
-    .select("id, username, role, is_active, created_at")
+    .select("id, username, role, is_active, menu_perms, created_at")
     .order("created_at", { ascending: true });
 
   return (

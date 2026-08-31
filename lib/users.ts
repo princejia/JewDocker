@@ -16,6 +16,7 @@ export type AppUser = {
   password_hash: string;
   role: string;
   is_active: boolean;
+  menu_perms: string[] | null;
   created_at: string;
 };
 

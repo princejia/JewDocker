@@ -10,7 +10,7 @@ import { NAV_ITEMS } from "@/components/layout/nav-items";
 export function MobileNav() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
-  const [role, setRole] = useState<string>("");
+  const [menus, setMenus] = useState<string[] | null>(null);
 
   // 路由切换后自动关闭抽屉
   useEffect(() => {
@@ -20,13 +20,13 @@ export function MobileNav() {
   useEffect(() => {
     fetch("/api/auth/me", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : { user: null }))
-      .then((j) => setRole(j.user?.role ?? ""))
-      .catch(() => setRole(""));
+      .then((j) => setMenus(j.user?.menus ?? []))
+      .catch(() => setMenus([]));
   }, []);
 
-  const items = NAV_ITEMS.filter(
-    (item) => !item.superAdminOnly || role === "super_admin"
-  );
+  const items = menus
+    ? NAV_ITEMS.filter((item) => menus.includes(item.href))
+    : [];
 
   return (
     <div className="md:hidden">

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createServerClient } from "@/lib/supabase-server";
 import { requireSuperAdmin, hashPassword } from "@/lib/users";
+import { sanitizeMenuPerms } from "@/lib/menus";
 
 export const dynamic = "force-dynamic";
 
@@ -9,6 +10,8 @@ const patchSchema = z.object({
   password: z.string().min(6, "密码至少 6 位").optional(),
   role: z.enum(["super_admin", "user"]).optional(),
   is_active: z.boolean().optional(),
+  // null = 恢复默认（全部业务菜单）
+  menu_perms: z.array(z.string()).nullable().optional(),
 });
 
 export async function PATCH(
@@ -35,6 +38,11 @@ export async function PATCH(
   if (parsed.data.role) update.role = parsed.data.role;
   if (typeof parsed.data.is_active === "boolean") {
     update.is_active = parsed.data.is_active;
+  }
+  if (parsed.data.menu_perms !== undefined) {
+    update.menu_perms = parsed.data.menu_perms
+      ? sanitizeMenuPerms(parsed.data.menu_perms)
+      : null;
   }
   if (Object.keys(update).length === 0) {
     return NextResponse.json({ error: "无更新内容" }, { status: 400 });
