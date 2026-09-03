@@ -118,6 +118,23 @@ export const recycleSchema = z.object({
 
 export type RecycleSchema = z.infer<typeof recycleSchema>;
 
+export const processingBaseSchema = z.object({
+  ordered_at: z.string().min(1, "下单日期必填"),
+  customer_id: z.string().uuid().nullable().optional(),
+  customer_name: z.string().min(1, "客户名字必填").max(100),
+  product_id: z.string().uuid().nullable().optional(),
+  loose_stone_id: z.string().uuid().nullable().optional(),
+  requirement: z.string().max(2000).nullable().optional(),
+  fee: z.coerce.number().nonnegative().default(0),
+});
+
+export const processingSchema = processingBaseSchema.refine(
+  (d) => d.product_id || d.loose_stone_id,
+  { message: "需选择要加工的产品或裸石" }
+);
+
+export type ProcessingSchema = z.infer<typeof processingSchema>;
+
 export const quoteSchema = z.object({
   customer_id: z.string().uuid().nullable().optional(),
   customer_name: z.string().min(1, "客户名称必填").max(100),

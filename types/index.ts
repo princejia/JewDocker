@@ -234,6 +234,49 @@ export interface QuoteWithItems extends Quote {
   quote_items?: QuoteItemWithProduct[];
 }
 
+export interface Processing {
+  id: string;
+  /** 加工单号 J + 年月日时分秒，由数据库触发器生成 */
+  code: string | null;
+  ordered_at: string;
+  customer_id: string | null;
+  customer_name: string;
+  product_id: string | null;
+  loose_stone_id: string | null;
+  requirement: string | null;
+  fee: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProcessingWithRelations extends Processing {
+  products?: Pick<
+    Product,
+    | "id"
+    | "code"
+    | "name"
+    | "image_urls"
+    | "total_weight"
+    | "weight_unit"
+    | "size"
+    | "inlaid_stones"
+    | "gemstone_category"
+    | "function_category"
+  > | null;
+  loose_stones?: Pick<
+    LooseStone,
+    | "id"
+    | "code"
+    | "material"
+    | "image_urls"
+    | "weight"
+    | "weight_unit"
+    | "size"
+    | "gemstone_category"
+  > | null;
+  customers?: Pick<Customer, "id" | "name"> | null;
+}
+
 export interface PaginatedResponse<T> {
   data: T[];
   total: number;

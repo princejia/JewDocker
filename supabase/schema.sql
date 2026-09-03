@@ -239,6 +239,29 @@ CREATE TABLE IF NOT EXISTS recycles (
 CREATE INDEX IF NOT EXISTS idx_recycles_recycled_at ON recycles(recycled_at DESC);
 
 -- ------------------------------------------------------------
+-- 加工单（一张单对应一件待加工的产品或裸石）
+-- customer_name / code 为快照，客户或物品被删除后仍可追溯
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS processings (
+  id             UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  code           VARCHAR(20),                                  -- 加工单号 J + 年月日时分秒
+  ordered_at     DATE NOT NULL DEFAULT CURRENT_DATE,           -- 下单日期
+  customer_id    UUID REFERENCES customers(id) ON DELETE SET NULL,
+  customer_name  VARCHAR(100) NOT NULL,
+  product_id     UUID REFERENCES products(id) ON DELETE SET NULL,
+  loose_stone_id UUID REFERENCES loose_stones(id) ON DELETE SET NULL,
+  requirement    TEXT,                                         -- 加工要求
+  fee            DECIMAL(12,2) NOT NULL DEFAULT 0,             -- 加工费用
+  created_at     TIMESTAMPTZ DEFAULT NOW(),
+  updated_at     TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_processings_ordered_at ON processings(ordered_at DESC);
+CREATE INDEX IF NOT EXISTS idx_processings_customer ON processings(customer_id);
+CREATE INDEX IF NOT EXISTS idx_processings_product ON processings(product_id);
+CREATE INDEX IF NOT EXISTS idx_processings_loose_stone ON processings(loose_stone_id);
+
+-- ------------------------------------------------------------
 -- 报价单（一个客户一张）与报价明细（一件产品一条）
 -- 明细转为销售后回写 sale_id，不重复转
 -- ------------------------------------------------------------
@@ -308,6 +331,11 @@ CREATE TRIGGER loose_stones_updated_at
 DROP TRIGGER IF EXISTS quotes_updated_at ON quotes;
 CREATE TRIGGER quotes_updated_at
   BEFORE UPDATE ON quotes
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+DROP TRIGGER IF EXISTS processings_updated_at ON processings;
+CREATE TRIGGER processings_updated_at
+  BEFORE UPDATE ON processings
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
 -- ------------------------------------------------------------
@@ -381,10 +409,16 @@ CREATE TRIGGER quote_items_set_code
   BEFORE INSERT ON quote_items
   FOR EACH ROW EXECUTE FUNCTION set_record_code('Q');
 
+DROP TRIGGER IF EXISTS processings_set_code ON processings;
+CREATE TRIGGER processings_set_code
+  BEFORE INSERT ON processings
+  FOR EACH ROW EXECUTE FUNCTION set_record_code('J');
+
 -- 回填已有数据的编号（幂等）
 UPDATE products     SET code = next_record_code('P', created_at) WHERE code IS NULL OR code = '';
 UPDATE loose_stones SET code = next_record_code('L', created_at) WHERE code IS NULL OR code = '';
 UPDATE quote_items  SET code = next_record_code('Q', created_at) WHERE code IS NULL OR code = '';
+UPDATE processings  SET code = next_record_code('J', created_at) WHERE code IS NULL OR code = '';
 
 -- ------------------------------------------------------------
 -- 常用索引
@@ -401,6 +435,7 @@ DROP INDEX IF EXISTS idx_loose_stones_code;
 CREATE UNIQUE INDEX IF NOT EXISTS uq_products_code ON products(code);
 CREATE UNIQUE INDEX IF NOT EXISTS uq_loose_stones_code ON loose_stones(code);
 CREATE UNIQUE INDEX IF NOT EXISTS uq_quote_items_code ON quote_items(code);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_processings_code ON processings(code);
 
 -- ============================================================
 -- 行级安全策略 (RLS)
@@ -414,6 +449,7 @@ ALTER TABLE item_loans ENABLE ROW LEVEL SECURITY;
 ALTER TABLE recycles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE quotes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE quote_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE processings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE record_code_seq ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Authenticated users can read products" ON products;
@@ -464,6 +500,11 @@ CREATE POLICY "Authenticated users can manage quotes"
 DROP POLICY IF EXISTS "Authenticated users can manage quote items" ON quote_items;
 CREATE POLICY "Authenticated users can manage quote items"
   ON quote_items FOR ALL
+  TO authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Authenticated users can manage processings" ON processings;
+CREATE POLICY "Authenticated users can manage processings"
+  ON processings FOR ALL
   TO authenticated USING (true) WITH CHECK (true);
 
 -- ============================================================

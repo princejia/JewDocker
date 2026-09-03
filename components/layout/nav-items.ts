@@ -8,6 +8,7 @@ import {
   BarChart3,
   ArrowLeftRight,
   Recycle,
+  Hammer,
   ShieldCheck,
   type LucideIcon,
 } from "lucide-react";
@@ -25,6 +26,7 @@ const ICONS: Record<string, LucideIcon> = {
   "/loose-stones": Diamond,
   "/quotes": FileText,
   "/sales": Receipt,
+  "/processings": Hammer,
   "/loans": ArrowLeftRight,
   "/recycles": Recycle,
   "/customers": Users,

@@ -18,6 +18,7 @@ export const MENUS: MenuDef[] = [
   { key: "/loose-stones", label: "裸石管理" },
   { key: "/quotes", label: "报价管理" },
   { key: "/sales", label: "销售记录" },
+  { key: "/processings", label: "加工管理" },
   { key: "/loans", label: "借调管理" },
   { key: "/recycles", label: "回收管理" },
   { key: "/customers", label: "客户管理" },
@@ -78,6 +79,7 @@ const API_MENU_MAP: Array<[string, string]> = [
   ["/api/sales", "/sales"],
   ["/api/returns", "/sales"],
   ["/api/loans", "/loans"],
+  ["/api/processings", "/processings"],
   ["/api/recycles", "/recycles"],
   ["/api/customers", "/customers"],
 ];
