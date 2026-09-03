@@ -235,7 +235,27 @@
 
 > **各项小计与总价均为写入时的快照**，不随产品档案后续修改而变；服务端只接收原始输入并重算，不信任客户端传来的金额。`quote_items.sale_id` 与 `product_sales.quote_item_id` 互相回写，两个方向都能查。
 
-### 2.9 SQL 建表语句
+### 2.9 关联表：processings（加工单表）
+
+登记客户送来的加工需求，一张加工单对应一件待加工的产品或裸石。
+
+| 字段名 | 中文名 | 类型 | 说明 |
+|--------|--------|------|------|
+| id | 主键 | UUID | 唯一标识 |
+| code | 加工单号 | VARCHAR(20) | 触发器自动发号，`J + 北京时间年月日时分秒`，全表唯一 |
+| ordered_at | 下单日期 | DATE | 默认当天 |
+| customer_id | 客户ID | UUID FK | 关联 customers.id，客户被删时置空 |
+| customer_name | 客户名字 | VARCHAR(100) | 下单时的客户名快照，必填 |
+| product_id | 加工产品 | UUID FK | 关联 products.id，与 loose_stone_id 二选一 |
+| loose_stone_id | 加工裸石 | UUID FK | 关联 loose_stones.id，与 product_id 二选一 |
+| requirement | 加工要求 | TEXT | 多行文本，可选填 |
+| fee | 加工费用 | DECIMAL(12,2) | 默认 0 |
+| created_at | 创建时间 | TIMESTAMPTZ | 同日多单按此倒序 |
+| updated_at | 更新时间 | TIMESTAMPTZ | 触发器自动维护 |
+
+> `customer_name` 存快照而非只靠外键：客户档案被删除后加工单仍可追溯到当时的客户名。加工物品与借调、销售一致采用「产品 / 裸石二选一」的双外键，服务端校验至少填一个。
+
+### 2.10 SQL 建表语句
 
 在 Supabase SQL Editor 中执行：
 
@@ -356,6 +376,22 @@ CREATE TABLE item_loans (
   notes            TEXT,
   created_at       TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- 加工单（产品与裸石二选一）
+CREATE TABLE processings (
+  id             UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  code           VARCHAR(20),                       -- 加工单号，自动生成
+  ordered_at     DATE NOT NULL DEFAULT CURRENT_DATE,
+  customer_id    UUID REFERENCES customers(id) ON DELETE SET NULL,
+  customer_name  VARCHAR(100) NOT NULL,
+  product_id     UUID REFERENCES products(id) ON DELETE SET NULL,
+  loose_stone_id UUID REFERENCES loose_stones(id) ON DELETE SET NULL,
+  requirement    TEXT,
+  fee            DECIMAL(12,2) NOT NULL DEFAULT 0,
+  created_at     TIMESTAMPTZ DEFAULT NOW(),
+  updated_at     TIMESTAMPTZ DEFAULT NOW()
+);
+
 CREATE OR REPLACE FUNCTION update_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -416,6 +452,10 @@ CREATE TRIGGER loose_stones_set_code
   BEFORE INSERT ON loose_stones
   FOR EACH ROW EXECUTE FUNCTION set_record_code('L');
 
+CREATE TRIGGER processings_set_code
+  BEFORE INSERT ON processings
+  FOR EACH ROW EXECUTE FUNCTION set_record_code('J');
+
 -- 常用索引
 CREATE INDEX idx_products_sale_status ON products(sale_status);
 CREATE INDEX idx_products_purchased_at ON products(purchased_at);
@@ -430,6 +470,9 @@ CREATE INDEX idx_product_sales_loose_stone ON product_sales(loose_stone_id);
 CREATE INDEX idx_item_loans_product ON item_loans(product_id);
 CREATE INDEX idx_item_loans_loose_stone ON item_loans(loose_stone_id);
 CREATE INDEX idx_item_loans_returned ON item_loans(returned_at);
+CREATE UNIQUE INDEX uq_processings_code ON processings(code);
+CREATE INDEX idx_processings_ordered_at ON processings(ordered_at DESC);
+CREATE INDEX idx_processings_customer ON processings(customer_id);
 ```
 
 ---
@@ -655,7 +698,21 @@ jewelry-system/
 
 > **销售与借调互斥**：已售出的物品不可再借调，借调中的物品不可出售/借售；该约束在前端列表过滤与服务端接口校验中双向强制执行。
 
-### 4.6 回收管理模块 `/recycles`
+### 4.6 加工管理模块 `/processings`
+
+登记客户的加工需求（改圈口、抛光翻新、重新镶嵌等），字段与交互：
+
+- **加工单号**：新增时由数据库触发器自动发号，格式 `J` + 北京时间 YYYYMMDDHH24MISS，与产品 `P`、裸石 `L`、报价 `Q` 共用发号表 `record_code_seq`，唯一索引兜底；表单不可手改，编辑时只读展示
+- **下单日期**：默认当天，可改
+- **客户名字**：可搜索下拉，聚焦后展开客户列表，按姓名 / 电话 / 微信实时过滤，选中后自动收起；同时写入 `customer_id` 与 `customer_name` 快照
+- **要加工的产品资料**：可搜索下拉，候选项合并【产品】与【裸石】两张表的数据（产品接口单页上限 100，逐页拉全），按编号或名称/材质过滤，每行尾部标出「产品 / 裸石」
+- **悬停预览**：下拉选项与列表行的物品名称，鼠标移上去弹出跟随光标的详情卡片（复用 `ProductHoverPreview`：略缩图、名称、重量、尺寸、镶嵌配石、宝石分类、功能分类）；裸石按「材质→名称、重量→总重」映射后复用同一张卡片
+- **加工要求**：多行文本，可选填
+- **加工费用**：数字，默认 0
+- 列表按下单日期倒序（同日再按录入时间倒序），统计卡片显示加工单总数与加工费用合计；PC 表格 / 手机卡片双布局，支持新增、编辑与删除（删除带二次确认）
+- **服务端校验**：客户名必填，产品与裸石至少选一（zod `refine`）
+
+### 4.7 回收管理模块 `/recycles`
 
 登记回收进来的旧料，字段与交互：
 
@@ -666,13 +723,13 @@ jewelry-system/
 - 列表按日期倒序展示，统计卡片显示回收总数 / 黄金 / 宝石数量，支持编辑与删除（删除带二次确认）
 - 关联产品在列表中显示为可点击标签，跳转到产品只读详情页
 
-### 4.7 客户管理模块 `/customers`
+### 4.8 客户管理模块 `/customers`
 
 - 客户档案：姓名、电话、微信、备注，支持新增/编辑/删除（删除带二次确认）
 - 购买历史：点击客户查看其所有购买记录，产品与裸石均展示并标出类型
 - 欠款客户快速筛选
 
-### 4.8 财务报表模块 `/reports`
+### 4.9 财务报表模块 `/reports`
 
 | 报表名称 | 内容说明 |
 |----------|----------|
@@ -697,7 +754,7 @@ jewelry-system/
 
 ---
 
-### 4.9 标签打印与扫码查询模块
+### 4.10 标签打印与扫码查询模块
 
 为方便实体库存盘点与快速取件，产品与裸石均支持二维码标签打印与扫码定位。
 
@@ -733,7 +790,7 @@ jewelry-system/
 
 ---
 
-### 4.10 认证与账号管理模块 `/users`
+### 4.11 认证与账号管理模块 `/users`
 
 系统采用**自建用户名登录**，不再依赖 Supabase Auth：
 
@@ -796,6 +853,10 @@ jewelry-system/
 | POST | /api/recycles | 登记回收 | 分类/日期/关联产品数组/备注 |
 | PATCH | /api/recycles/[id] | 更新回收记录 | 部分更新 |
 | DELETE | /api/recycles/[id] | 删除回收记录 | |
+| GET | /api/processings | 获取加工单 | 含产品/裸石/客户关联，按下单日期倒序，支持按单号/客户名搜索 |
+| POST | /api/processings | 新增加工单 | 单号由触发器发号；产品与裸石至少选一 |
+| PATCH | /api/processings/[id] | 更新加工单 | 部分更新 |
+| DELETE | /api/processings/[id] | 删除加工单 | 前端二次确认 |
 | POST | /api/auth/login | 登录 | 用户名+密码校验，签发 JWT Cookie；首次自动兜底建超管 |
 | POST | /api/auth/logout | 退出登录 | 清除会话 Cookie |
 | GET | /api/auth/me | 当前登录信息 | 返回 id/用户名/角色，未登录返回 401 |
@@ -1133,6 +1194,7 @@ export async function POST(req: NextRequest) {
 | /quotes | 报价管理 | 报价单列表，按报价时间倒序 |
 | /quotes/[id] | 报价详情 | 修改客户名称、添加/删除报价记录、单条转为销售 |
 | /sales | 销售记录 | 销售流水、付款跟踪、退货登记 |
+| /processings | 加工管理 | 加工单列表与新增/编辑，客户与产品资料可搜索下拉，悬停显示详情卡 |
 | /loans | 借调管理 | 借出登记、归还、借调状态追踪 |
 | /recycles | 回收管理 | 回收旧料登记，可关联多件产品 |
 | /customers | 客户管理 | 客户档案、购买历史 |
