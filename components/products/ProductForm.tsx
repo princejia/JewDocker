@@ -496,7 +496,9 @@ export function ProductForm({ initial }: ProductFormProps) {
                           : null,
                         s.material,
                         s.size,
-                        s.weight != null ? `${s.weight}g` : null,
+                        s.weight != null
+                          ? `${s.weight}${s.weight_unit || "克(g)"}`
+                          : null,
                       ]
                         .filter(Boolean)
                         .join(" · ") || "裸石"}
