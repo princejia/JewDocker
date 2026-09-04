@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, ChevronDown, Pencil, Trash2 } from "lucide-react";
+import { ArrowLeft, ChevronDown, Eye, Pencil, Trash2 } from "lucide-react";
 import { Product, QuoteItemWithProduct, QuoteWithItems } from "@/types";
 import { formatCurrency, formatDateTime, formatProductCode, cn } from "@/lib/utils";
 import { isGoldCategory } from "@/lib/constants";
@@ -72,6 +72,9 @@ export function QuoteEditor({ quote }: { quote: QuoteWithItems }) {
   const [busyItemId, setBusyItemId] = useState<string | null>(null);
   const [preview, setPreview] = useState<HoverPreview | null>(null);
   const [editTarget, setEditTarget] = useState<QuoteItemWithProduct | null>(
+    null,
+  );
+  const [viewTarget, setViewTarget] = useState<QuoteItemWithProduct | null>(
     null,
   );
   const [deleteTarget, setDeleteTarget] = useState<QuoteItemWithProduct | null>(
@@ -433,7 +436,17 @@ export function QuoteEditor({ quote }: { quote: QuoteWithItems }) {
                   className={cn(item.id === highlightId && "bg-amber-50")}
                 >
                   <TableCell className="font-mono text-xs text-gray-500">
-                    {item.code ?? "-"}
+                    {item.sale_id ? (
+                      <button
+                        type="button"
+                        onClick={() => setViewTarget(item)}
+                        className="font-mono text-amber-700 hover:underline"
+                      >
+                        {item.code ?? "查看详情"}
+                      </button>
+                    ) : (
+                      (item.code ?? "-")
+                    )}
                   </TableCell>
                   <TableCell className="font-medium">
                     {item.products ? (
@@ -472,7 +485,16 @@ export function QuoteEditor({ quote }: { quote: QuoteWithItems }) {
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-2">
-                      {!item.sale_id && (
+                      {item.sale_id ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setViewTarget(item)}
+                        >
+                          <Eye className="h-4 w-4" />
+                          查看详情
+                        </Button>
+                      ) : (
                         <>
                           <Button
                             size="sm"
@@ -512,6 +534,12 @@ export function QuoteEditor({ quote }: { quote: QuoteWithItems }) {
       <EditQuoteItemDialog
         item={editTarget}
         onOpenChange={(o) => !o && setEditTarget(null)}
+      />
+
+      <EditQuoteItemDialog
+        item={viewTarget}
+        readOnly
+        onOpenChange={(o) => !o && setViewTarget(null)}
       />
 
       {preview && <ProductHoverPreview {...preview} />}
