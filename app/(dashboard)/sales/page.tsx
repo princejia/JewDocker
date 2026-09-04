@@ -11,7 +11,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Receipt, TrendingUp, Users } from "lucide-react";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatCurrency, formatDate, nextMonthStart } from "@/lib/utils";
 import { CollapsibleRows } from "@/components/ui/CollapsibleRows";
 import { RecordSaleDialog } from "@/components/sales/RecordSaleDialog";
 import { SaleRowActions } from "@/components/sales/SaleRowActions";
@@ -20,21 +20,53 @@ import { ReturnsManager } from "@/components/sales/ReturnsManager";
 export const dynamic = "force-dynamic";
 
 const PAGE_SIZE = 20;
+const UNASSIGNED = "__none__";
 
 export default async function SalesPage({
   searchParams,
 }: {
-  searchParams?: { page?: string };
+  searchParams?: { page?: string; month?: string; salesperson?: string };
 }) {
   const supabase = createServerClient();
 
-  // 统计与按月汇总需要全量数据，不能只算当前页；总数也复用它，省一次 count 查询
-  const { data: allSalesData } = await supabase
+  const month = /^\d{4}-\d{2}$/.test(searchParams?.month ?? "")
+    ? (searchParams?.month as string)
+    : "";
+  const salesperson = searchParams?.salesperson?.trim() || "";
+  const monthFrom = month ? `${month}-01` : "";
+  const monthTo = month ? nextMonthStart(month) : "";
+
+  // 筛选下拉的可选项取自全量数据，不随当前筛选变化
+  const { data: facetData } = await supabase
     .from("product_sales")
-    .select("sale_price, sold_at");
+    .select("sold_at, salesperson");
+  const facets = (facetData ?? []) as {
+    sold_at: string | null;
+    salesperson: string | null;
+  }[];
+  const monthOptions = [
+    ...new Set(facets.map((f) => (f.sold_at ?? "").slice(0, 7)).filter(Boolean)),
+  ].sort((a, b) => b.localeCompare(a));
+  const salespersonOptions = [
+    ...new Set(facets.map((f) => f.salesperson).filter((v): v is string => !!v)),
+  ].sort((a, b) => a.localeCompare(b, "zh-CN"));
+
+  // 统计与按月汇总需要全量数据，不能只算当前页；总数也复用它，省一次 count 查询
+  let allSalesQuery = supabase
+    .from("product_sales")
+    .select("sale_price, sold_at, salesperson");
+  if (month)
+    allSalesQuery = allSalesQuery.gte("sold_at", monthFrom).lt("sold_at", monthTo);
+  if (salesperson)
+    allSalesQuery =
+      salesperson === UNASSIGNED
+        ? allSalesQuery.is("salesperson", null)
+        : allSalesQuery.eq("salesperson", salesperson);
+  const { data: allSalesData } = await allSalesQuery;
   const allSales = (allSalesData ?? []) as {
     sale_price: number;
     sold_at: string;
+    salesperson: string | null;
   }[];
 
   const total = allSales.length;
@@ -44,14 +76,24 @@ export default async function SalesPage({
     Math.max(1, Number(searchParams?.page || 1) || 1),
   );
 
-  const { data } = await supabase
+  let listQuery = supabase
     .from("product_sales")
     .select(
       "*, products(id, code, name, image_urls, sale_status), customers(id, name), loose_stones(id, code, material, image_urls, sale_status)",
     )
     .order("sold_at", { ascending: false })
-    .order("created_at", { ascending: false })
-    .range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1);
+    .order("created_at", { ascending: false });
+  if (month)
+    listQuery = listQuery.gte("sold_at", monthFrom).lt("sold_at", monthTo);
+  if (salesperson)
+    listQuery =
+      salesperson === UNASSIGNED
+        ? listQuery.is("salesperson", null)
+        : listQuery.eq("salesperson", salesperson);
+  const { data } = await listQuery.range(
+    (page - 1) * PAGE_SIZE,
+    page * PAGE_SIZE - 1,
+  );
 
   const sales = (data ?? []) as ProductSaleWithRelations[];
 
@@ -80,9 +122,18 @@ export default async function SalesPage({
     }
   }
 
-  const { data: returnsData } = await supabase
+  // 退货没有销售员归属，按销售员筛选时不参与统计
+  const refundApplies = !salesperson;
+  let returnsQuery = supabase
     .from("product_returns")
     .select("refund_amount, returned_at");
+  if (month)
+    returnsQuery = returnsQuery
+      .gte("returned_at", monthFrom)
+      .lt("returned_at", monthTo);
+  const { data: returnsData } = refundApplies
+    ? await returnsQuery
+    : { data: [] };
   const returns = (returnsData ?? []) as Pick<
     ProductReturn,
     "refund_amount" | "returned_at"
@@ -129,6 +180,30 @@ export default async function SalesPage({
     b.month.localeCompare(a.month),
   );
 
+  // 按销售员汇总：退货无销售员归属，这里只统计成交额
+  const byPerson = new Map<string, { name: string; count: number; gross: number }>();
+  for (const s of allSales) {
+    const name = s.salesperson || "未指定";
+    let row = byPerson.get(name);
+    if (!row) {
+      row = { name, count: 0, gross: 0 };
+      byPerson.set(name, row);
+    }
+    row.count += 1;
+    row.gross += Number(s.sale_price || 0);
+  }
+  const personRows = [...byPerson.values()].sort((a, b) => b.gross - a.gross);
+
+  const filtered = !!(month || salesperson);
+  const pageHref = (p: number) => {
+    const params = new URLSearchParams();
+    if (month) params.set("month", month);
+    if (salesperson) params.set("salesperson", salesperson);
+    if (p > 1) params.set("page", String(p));
+    const qs = params.toString();
+    return qs ? `/sales?${qs}` : "/sales";
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -136,19 +211,85 @@ export default async function SalesPage({
         <RecordSaleDialog />
       </div>
 
+      <form
+        action="/sales"
+        className="flex flex-wrap items-end gap-3 rounded-xl border bg-white p-4"
+      >
+        <div className="space-y-1">
+          <label htmlFor="filter-month" className="block text-xs text-gray-500">
+            月份
+          </label>
+          <select
+            id="filter-month"
+            name="month"
+            defaultValue={month}
+            className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+          >
+            <option value="">全部月份</option>
+            {monthOptions.map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="space-y-1">
+          <label
+            htmlFor="filter-salesperson"
+            className="block text-xs text-gray-500"
+          >
+            销售员
+          </label>
+          <select
+            id="filter-salesperson"
+            name="salesperson"
+            defaultValue={salesperson}
+            className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+          >
+            <option value="">全部销售员</option>
+            {salespersonOptions.map((p) => (
+              <option key={p} value={p}>
+                {p}
+              </option>
+            ))}
+            <option value={UNASSIGNED}>未指定</option>
+          </select>
+        </div>
+        <button
+          type="submit"
+          className="h-10 rounded-md bg-amber-600 px-4 text-sm font-medium text-white hover:bg-amber-700"
+        >
+          查询
+        </button>
+        {filtered && (
+          <Link
+            href="/sales"
+            className="flex h-10 items-center rounded-md border px-4 text-sm text-gray-700 hover:bg-gray-50"
+          >
+            重置
+          </Link>
+        )}
+      </form>
+
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <StatsCard
-          title="总成交笔数"
+          title={filtered ? "筛选成交笔数" : "总成交笔数"}
           value={total}
           icon={Receipt}
           accent="amber"
         />
         <StatsCard
-          title="总销售额"
+          title={filtered ? "筛选销售额" : "总销售额"}
           value={formatCurrency(totalRevenue)}
           icon={TrendingUp}
           accent="green"
-          hint="全部历史累计，已扣除退款"
+          hint={
+            refundApplies
+              ? filtered
+                ? "当前筛选口径，已扣除退款"
+                : "全部历史累计，已扣除退款"
+              : "退货无销售员归属，未扣除退款"
+          }
         />
         <StatsCard
           title="平均客单价"
@@ -156,6 +297,44 @@ export default async function SalesPage({
           icon={Users}
           accent="blue"
         />
+      </div>
+
+      <div className="rounded-xl border bg-white">
+        <div className="border-b px-4 py-3">
+          <h2 className="text-base font-semibold text-gray-900">按销售员统计</h2>
+        </div>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>销售员</TableHead>
+              <TableHead className="text-right">成交笔数</TableHead>
+              <TableHead className="text-right">销售额</TableHead>
+              <TableHead className="text-right">平均客单价</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {personRows.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={4} className="text-center text-gray-400">
+                  暂无数据
+                </TableCell>
+              </TableRow>
+            ) : (
+              personRows.map((p) => (
+                <TableRow key={p.name}>
+                  <TableCell className="font-medium">{p.name}</TableCell>
+                  <TableCell className="text-right">{p.count}</TableCell>
+                  <TableCell className="text-right font-medium text-amber-700">
+                    {formatCurrency(p.gross)}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {p.count ? formatCurrency(p.gross / p.count) : "-"}
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
       </div>
 
       <div className="rounded-xl border bg-white">
@@ -267,6 +446,11 @@ export default async function SalesPage({
                       {s.payment_method}
                     </span>
                   )}
+                  {s.salesperson && (
+                    <span className="rounded-full bg-blue-50 px-2 py-0.5 text-blue-700">
+                      销售员 {s.salesperson}
+                    </span>
+                  )}
                   {s.quote_items?.code && (
                     <Link
                       href={`/quotes/${s.quote_items.quote_id}?item=${s.quote_items.id}`}
@@ -300,6 +484,7 @@ export default async function SalesPage({
               <TableHead>类型</TableHead>
               <TableHead>销售方式</TableHead>
               <TableHead>客户</TableHead>
+              <TableHead>销售员</TableHead>
               <TableHead>报价编号</TableHead>
               <TableHead className="text-right">成交价</TableHead>
               <TableHead>付款方式</TableHead>
@@ -311,7 +496,7 @@ export default async function SalesPage({
           <TableBody>
             {sales.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={10} className="text-center text-gray-400">
+                <TableCell colSpan={11} className="text-center text-gray-400">
                   暂无销售记录
                 </TableCell>
               </TableRow>
@@ -353,6 +538,7 @@ export default async function SalesPage({
                     )}
                   </TableCell>
                   <TableCell>{s.customers?.name ?? "-"}</TableCell>
+                  <TableCell>{s.salesperson || "-"}</TableCell>
                   <TableCell>
                     {s.quote_items?.code ? (
                       <Link
@@ -394,7 +580,7 @@ export default async function SalesPage({
           <div className="flex items-center gap-2">
             {page > 1 ? (
               <Link
-                href={`/sales?page=${page - 1}`}
+                href={pageHref(page - 1)}
                 className="rounded-lg border px-3 py-1.5 text-gray-700 hover:bg-gray-50"
               >
                 上一页
@@ -406,7 +592,7 @@ export default async function SalesPage({
             )}
             {page < totalPages ? (
               <Link
-                href={`/sales?page=${page + 1}`}
+                href={pageHref(page + 1)}
                 className="rounded-lg border px-3 py-1.5 text-gray-700 hover:bg-gray-50"
               >
                 下一页

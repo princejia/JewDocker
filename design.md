@@ -111,6 +111,7 @@
 | customer_id | 客户ID | UUID FK | 关联 customers.id，可为空 |
 | sale_price | 成交价格 | DECIMAL(12,2) | 实际成交金额 |
 | payment_method | 付款方式 | VARCHAR(50) | 现金/微信/支付宝/银行转账/信用卡 |
+| salesperson | 销售员 | VARCHAR(100) | 手动输入，可为空；用于提成统计，建有索引 |
 | quote_item_id | 报价明细ID | UUID FK | 关联 quote_items.id，只有由报价转入的销售才有值 |
 | notes | 备注 | TEXT | 销售备注，由报价转入时自动写「由报价转入」 |
 | sold_at | 成交时间 | DATE | 实际售出日期 |
@@ -347,6 +348,7 @@ CREATE TABLE product_sales (
   customer_id    UUID REFERENCES customers(id) ON DELETE SET NULL,
   sale_price     DECIMAL(12,2) NOT NULL,
   payment_method VARCHAR(50),
+  salesperson    VARCHAR(100),   -- 销售员，手动录入
   sold_at        DATE NOT NULL DEFAULT CURRENT_DATE,
   created_at     TIMESTAMPTZ DEFAULT NOW()
 );
@@ -467,6 +469,7 @@ CREATE INDEX idx_returns_sale ON product_returns(sale_id);
 CREATE INDEX idx_returns_product ON product_returns(product_id);
 CREATE INDEX idx_returns_returned_at ON product_returns(returned_at);
 CREATE INDEX idx_product_sales_loose_stone ON product_sales(loose_stone_id);
+CREATE INDEX idx_product_sales_salesperson ON product_sales(salesperson);
 CREATE INDEX idx_item_loans_product ON item_loans(product_id);
 CREATE INDEX idx_item_loans_loose_stone ON item_loans(loose_stone_id);
 CREATE INDEX idx_item_loans_returned ON item_loans(returned_at);
@@ -654,6 +657,9 @@ jewelry-system/
 - **借调中的物品不可出售/借售**：登记销售时的物品下拉列表自动过滤掉正在借调中的产品/裸石；服务端在创建销售记录前也会二次校验，若物品存在未归还的借调记录则拒绝并提示
 - **物品选择支持搜索**：登记销售的物品选择器是可折叠的搜索下拉——收起时显示已选物品的编号与名称，展开后顶部为搜索框，按编号或名称/材质实时过滤，点选后自动收起；在库产品逐页拉全（接口单页上限 100），保证搜索覆盖全部在库物品
 - **产品下拉悬停预览**：登记销售选择在库产品时，鼠标移到选项上弹出跟随光标的详情卡片（略缩图、名称、重量+单位、尺寸、镶嵌配石、宝石分类、功能分类），空字段自动省略；卡片挂载到 `body` 并 `fixed` 定位以避开下拉框裁切，触屏（`md` 以下）不显示
+- **销售员**：登记与修改销售时手动输入，输入框带 datalist 联想（候选值来自 `/api/options` 返回的已录入销售员去重列表，避免同一人写成多个写法）；列表新增【销售员】列（手机端为卡片上的蓝色徽章）
+- **按月份 / 销售员筛选**：页面顶部筛选栏是原生 GET 表单（`?month=YYYY-MM&salesperson=`），服务端直接带条件查库；销售员可选「未指定」；统计卡片、按月统计、按销售员统计与分页均跟随当前筛选口径，翻页保留筛选参数
+- **按销售员统计**：列出每位销售员的成交笔数、销售额与平均客单价，按销售额倒序，方便核算提成；由于 `product_returns` 不记销售员，**按销售员筛选时退款不参与抵减**，统计卡片会给出提示
 - 按时间范围查看销售流水，每条记录显示：物品信息、类型（产品/裸石）、客户、成交价、付款方式、成交时间，可修改与删除（删除后物品恢复为【在库】）
 - **分页**：流水列表服务端分页，每页 20 条（`?page=` 查询参数 + `range()`），底部提供上一页/下一页与「共 N 条 · 第 X / Y 页」；顶部统计卡片与按月统计仍基于全量数据，不随当前页变化
 - **报价来源**：由报价转入的销售显示报价编号，点击可回到对应报价单并高亮该条明细
@@ -820,9 +826,9 @@ jewelry-system/
 | PATCH | /api/products/[id] | 更新产品 | 部分更新 |
 | DELETE | /api/products/[id] | 删除产品 | 软删除 |
 | POST | /api/upload | 上传文件 | 上传图片/认证报告文档至腾讯云 COS，返回 URL |
-| GET | /api/sales | 获取销售记录 | 含产品/裸石关联，支持时间范围筛选 |
+| GET | /api/sales | 获取销售记录 | 含产品/裸石关联，支持 `from`/`to`/`month`(YYYY-MM)/`customer_id`/`salesperson` 筛选 |
 | POST | /api/sales | 创建销售记录 | 物品为产品或裸石，同时更新其销售状态与出售价；**借调中的物品拒绝出售** |
-| PATCH | /api/sales/[id] | 修改销售记录 | 同步回写物品成交价/状态/时间 |
+| PATCH | /api/sales/[id] | 修改销售记录 | 同步回写物品成交价/状态/时间，可改销售员 |
 | DELETE | /api/sales/[id] | 删除销售记录 | 物品恢复为【在库】 |
 | GET | /api/quotes | 报价单列表 | 含明细摘要，按报价时间倒序 |
 | POST | /api/quotes | 新建报价单 | 客户名按同名复用，找不到自动建档 |
@@ -1193,7 +1199,7 @@ export async function POST(req: NextRequest) {
 | /v/[type]/[id] | 扫码展示页 | 公开页：已登录跳转编辑页，未登录显示与标签同口径的商品信息（含售价，不含成本） |
 | /quotes | 报价管理 | 报价单列表，按报价时间倒序 |
 | /quotes/[id] | 报价详情 | 修改客户名称、添加/删除报价记录、单条转为销售 |
-| /sales | 销售记录 | 销售流水、付款跟踪、退货登记 |
+| /sales | 销售记录 | 销售流水、付款跟踪、退货登记；支持按月份/销售员筛选与按销售员统计 |
 | /processings | 加工管理 | 加工单列表与新增/编辑，客户与产品资料可搜索下拉，悬停显示详情卡 |
 | /loans | 借调管理 | 借出登记、归还、借调状态追踪 |
 | /recycles | 回收管理 | 回收旧料登记，可关联多件产品 |

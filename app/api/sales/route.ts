@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase-server";
 import { saleSchema } from "@/lib/validations";
+import { nextMonthStart } from "@/lib/utils";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;
   const from = searchParams.get("from");
   const to = searchParams.get("to");
+  const month = searchParams.get("month"); // YYYY-MM
   const customer_id = searchParams.get("customer_id");
+  const salesperson = searchParams.get("salesperson");
 
   const supabase = createServerClient();
 
@@ -20,7 +23,13 @@ export async function GET(req: NextRequest) {
 
   if (from) query = query.gte("sold_at", from);
   if (to) query = query.lte("sold_at", to);
+  if (month && /^\d{4}-\d{2}$/.test(month)) {
+    query = query
+      .gte("sold_at", `${month}-01`)
+      .lt("sold_at", nextMonthStart(month));
+  }
   if (customer_id) query = query.eq("customer_id", customer_id);
+  if (salesperson) query = query.eq("salesperson", salesperson);
 
   const { data, error } = await query;
 
@@ -81,6 +90,7 @@ export async function POST(req: NextRequest) {
       customer_id: parsed.data.customer_id ?? null,
       sale_price: parsed.data.sale_price,
       payment_method: parsed.data.payment_method ?? null,
+      salesperson: parsed.data.salesperson?.trim() || null,
       sold_at: soldAt,
       notes: parsed.data.notes ?? null,
     })

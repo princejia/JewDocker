@@ -6,6 +6,7 @@ import { Pencil, Trash2 } from "lucide-react";
 import { Customer, ProductSaleWithRelations } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Combobox } from "@/components/ui/Combobox";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
@@ -34,10 +35,12 @@ export function SaleRowActions({ sale }: { sale: ProductSaleWithRelations }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [salespersonOptions, setSalespersonOptions] = useState<string[]>([]);
 
   const [customerId, setCustomerId] = useState(sale.customer_id ?? NO_CUSTOMER);
   const [salePrice, setSalePrice] = useState(String(sale.sale_price ?? ""));
   const [paymentMethod, setPaymentMethod] = useState(sale.payment_method ?? "");
+  const [salesperson, setSalesperson] = useState(sale.salesperson ?? "");
   const [saleStatus, setSaleStatus] = useState<"sold" | "consignment">(
     (sale.products?.sale_status ?? sale.loose_stones?.sale_status) ===
       "consignment"
@@ -52,6 +55,10 @@ export function SaleRowActions({ sale }: { sale: ProductSaleWithRelations }) {
     fetch("/api/customers", { cache: "no-store" })
       .then((r) => r.json())
       .then((j) => setCustomers(j.data ?? []));
+    fetch("/api/options", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => setSalespersonOptions(j.salesperson ?? []))
+      .catch(() => undefined);
   }, [editOpen]);
 
   async function handleSave() {
@@ -68,6 +75,7 @@ export function SaleRowActions({ sale }: { sale: ProductSaleWithRelations }) {
         customer_id: customerId === NO_CUSTOMER ? null : customerId,
         sale_price: Number(salePrice),
         payment_method: paymentMethod || null,
+        salesperson: salesperson.trim() || null,
         sold_at: soldAt || undefined,
         sale_status: saleStatus,
         notes: notes.trim() || null,
@@ -181,6 +189,17 @@ export function SaleRowActions({ sale }: { sale: ProductSaleWithRelations }) {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-salesperson">销售员</Label>
+              <Combobox
+                id="edit-salesperson"
+                value={salesperson}
+                onChange={setSalesperson}
+                options={salespersonOptions}
+                maxLength={100}
+                placeholder="手动输入，已录入过的会自动联想"
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="edit-sold-at">成交时间</Label>

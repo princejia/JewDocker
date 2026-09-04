@@ -204,6 +204,10 @@ CREATE INDEX IF NOT EXISTS idx_product_sales_loose_stone ON product_sales(loose_
 -- 销售备注
 ALTER TABLE product_sales ADD COLUMN IF NOT EXISTS notes TEXT;
 
+-- 销售员（手动录入，用于提成统计）
+ALTER TABLE product_sales ADD COLUMN IF NOT EXISTS salesperson VARCHAR(100);
+CREATE INDEX IF NOT EXISTS idx_product_sales_salesperson ON product_sales(salesperson);
+
 -- ------------------------------------------------------------
 -- 借调记录表（产品与裸石均可借调）
 -- ------------------------------------------------------------

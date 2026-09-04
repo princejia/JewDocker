@@ -33,6 +33,14 @@ export function formatDateTime(value: string | null | undefined): string {
   )}:${pad(d.getMinutes())}`;
 }
 
+/** 由 YYYY-MM 得到下个月 1 号（YYYY-MM-DD），用于半开区间的按月筛选 */
+export function nextMonthStart(month: string): string {
+  const [y, m] = month.split("-").map(Number);
+  const year = m === 12 ? y + 1 : y;
+  const next = m === 12 ? 1 : m + 1;
+  return `${year}-${String(next).padStart(2, "0")}-01`;
+}
+
 /**
  * 生成产品/裸石编号：前缀 + 年月日时分秒（取自创建时间）。
  * 产品以 P 开头，裸石以 L 开头。

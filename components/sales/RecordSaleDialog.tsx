@@ -11,6 +11,7 @@ import {
 } from "@/components/products/ProductHoverPreview";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Combobox } from "@/components/ui/Combobox";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -61,6 +62,8 @@ export function RecordSaleDialog() {
   const [customerId, setCustomerId] = useState(NO_CUSTOMER);
   const [salePrice, setSalePrice] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("");
+  const [salesperson, setSalesperson] = useState("");
+  const [salespersonOptions, setSalespersonOptions] = useState<string[]>([]);
   const [soldAt, setSoldAt] = useState(new Date().toISOString().slice(0, 10));
   const [notes, setNotes] = useState("");
   const [preview, setPreview] = useState<HoverPreview | null>(null);
@@ -97,6 +100,10 @@ export function RecordSaleDialog() {
     fetch("/api/customers", { cache: "no-store" })
       .then((r) => r.json())
       .then((j) => setCustomers(j.data ?? []));
+    fetch("/api/options", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => setSalespersonOptions(j.salesperson ?? []))
+      .catch(() => undefined);
   }, [open]);
 
   useEffect(() => {
@@ -167,6 +174,7 @@ export function RecordSaleDialog() {
     setCustomerId(NO_CUSTOMER);
     setSalePrice("");
     setPaymentMethod("");
+    setSalesperson("");
     setNotes("");
   }
 
@@ -190,6 +198,7 @@ export function RecordSaleDialog() {
         customer_id: customerId === NO_CUSTOMER ? null : customerId,
         sale_price: Number(salePrice),
         payment_method: paymentMethod || null,
+        salesperson: salesperson.trim() || null,
         sold_at: soldAt,
         sale_status: saleType,
         notes: notes.trim() || null,
@@ -387,6 +396,18 @@ export function RecordSaleDialog() {
                 ))}
               </SelectContent>
             </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="sale-salesperson">销售员</Label>
+            <Combobox
+              id="sale-salesperson"
+              value={salesperson}
+              onChange={setSalesperson}
+              options={salespersonOptions}
+              maxLength={100}
+              placeholder="手动输入，已录入过的会自动联想"
+            />
           </div>
 
           <div className="space-y-2">

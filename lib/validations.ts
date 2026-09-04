@@ -70,6 +70,7 @@ export const saleSchema = z
     customer_id: z.string().uuid().nullable().optional(),
     sale_price: z.coerce.number().nonnegative(),
     payment_method: z.string().max(50).nullable().optional(),
+    salesperson: z.string().max(100).nullable().optional(),
     sold_at: z.string().optional(),
     notes: z.string().max(2000).nullable().optional(),
     sale_status: z.enum(["sold", "consignment"]).default("sold"),

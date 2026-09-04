@@ -106,6 +106,8 @@ export interface ProductSale {
   quote_item_id: string | null;
   sale_price: number;
   payment_method: string | null;
+  /** 销售员，手动录入 */
+  salesperson: string | null;
   sold_at: string;
   notes: string | null;
   created_at: string;

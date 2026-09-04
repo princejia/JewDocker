@@ -7,10 +7,12 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const supabase = createServerClient();
 
-  const [{ data: products }, { data: stones }] = await Promise.all([
-    supabase.from("products").select("gemstone_category, function_category"),
-    supabase.from("loose_stones").select("gemstone_category, material"),
-  ]);
+  const [{ data: products }, { data: stones }, { data: sales }] =
+    await Promise.all([
+      supabase.from("products").select("gemstone_category, function_category"),
+      supabase.from("loose_stones").select("gemstone_category, material"),
+      supabase.from("product_sales").select("salesperson"),
+    ]);
 
   const uniq = (arr: (string | null | undefined)[]) =>
     Array.from(new Set(arr.filter((v): v is string => !!v))).sort((a, b) =>
@@ -25,6 +27,12 @@ export async function GET() {
     (products ?? []).map((p) => p.function_category)
   );
   const material = uniq((stones ?? []).map((s) => s.material));
+  const salesperson = uniq((sales ?? []).map((s) => s.salesperson));
 
-  return NextResponse.json({ gemstone_category, function_category, material });
+  return NextResponse.json({
+    gemstone_category,
+    function_category,
+    material,
+    salesperson,
+  });
 }
