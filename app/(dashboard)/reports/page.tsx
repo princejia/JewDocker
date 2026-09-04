@@ -1,12 +1,9 @@
 import { createServerClient } from "@/lib/supabase-server";
-import { LooseStone, Product, ProductReturn } from "@/types";
+import { LooseStone, Product, ProductReturn, ProfitRow } from "@/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatsCard } from "@/components/ui/StatsCard";
 import { ProfitChart, ProfitDatum } from "@/components/reports/ProfitChart";
-import {
-  ProfitDetailTable,
-  ProfitRow,
-} from "@/components/reports/ProfitDetailTable";
+import { ProfitDetailTable } from "@/components/reports/ProfitDetailTable";
 import {
   Table,
   TableBody,
@@ -17,7 +14,7 @@ import {
 } from "@/components/ui/table";
 import { formatCurrency, formatDate, formatProductCode } from "@/lib/utils";
 import { CollapsibleRows } from "@/components/ui/CollapsibleRows";
-import { purchaseCostOf } from "@/lib/constants";
+import { purchaseCostOf, goldProfitParts } from "@/lib/constants";
 import { Coins, HelpCircle, Timer } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -92,10 +89,26 @@ export default async function ReportsPage() {
   }
 
   // 全部成交流水的利润明细
+  // 黄金拆解的销售侧工费/附加费优先用报价快照（含折扣）
+  const { data: quoteLinks } = await supabase
+    .from("quote_items")
+    .select("sale_id, labor_subtotal, surcharge_subtotal")
+    .not("sale_id", "is", null);
+  const quoteBySale = new Map(
+    ((quoteLinks ?? []) as {
+      sale_id: string;
+      labor_subtotal: number | null;
+      surcharge_subtotal: number | null;
+    }[]).map((q) => [q.sale_id, q])
+  );
+
   const profitRows: ProfitRow[] = sales.map((s) => {
     const cost = saleCost(s);
     const salePrice = Number(s.sale_price || 0);
     const item = s.products ?? s.loose_stones;
+    const gold = s.products
+      ? goldProfitParts(s.products, salePrice, quoteBySale.get(s.id))
+      : null;
     return {
       id: s.id,
       code:
@@ -105,6 +118,10 @@ export default async function ReportsPage() {
       sale_price: salePrice,
       cost,
       profit: salePrice - cost,
+      is_gold: !!gold,
+      labor_profit: gold?.laborProfit ?? null,
+      surcharge_profit: gold?.surchargeProfit ?? null,
+      gold_profit: gold?.goldProfit ?? null,
     };
   });
 
@@ -314,6 +331,11 @@ export default async function ReportsPage() {
       <Card>
         <CardHeader>
           <CardTitle className="text-base">已售产品利润明细</CardTitle>
+          <p className="mt-1 text-xs text-gray-400">
+            黄金另按三段拆解：工费利润 = 销售工费小计 − 工费成本×克重；附加费利润
+            = 销售附加费小计 − 附加费×买入折扣；金价利润 = (成交价 − 前两项) −
+            进货价×克重。三项之和等于该行利润，非黄金分类不拆解。
+          </p>
         </CardHeader>
         <CardContent>
           <ProfitDetailTable rows={profitRows} />

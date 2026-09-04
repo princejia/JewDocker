@@ -1,4 +1,4 @@
-import { Product, LooseStone } from "@/types";
+import { Product, LooseStone, ProfitRow } from "@/types";
 import { categoryLabel, purchaseCostOf } from "@/lib/constants";
 import { formatProductCode } from "@/lib/utils";
 
@@ -246,5 +246,58 @@ export async function exportLooseStonesToExcel(
 
   const name =
     filename ?? `裸石清单_${new Date().toISOString().slice(0, 10)}.xlsx`;
+  await downloadWorkbook(workbook, name);
+}
+
+/** 将利润明细导出为 Excel 文件并触发下载 */
+export async function exportProfitRowsToExcel(
+  rows: ProfitRow[],
+  filename?: string,
+) {
+  const ExcelJS = (await import("exceljs")).default;
+  const workbook = new ExcelJS.Workbook();
+  const ws = workbook.addWorksheet("利润明细");
+
+  ws.columns = [
+    { header: "编号", key: "code", width: 20 },
+    { header: "产品", key: "name", width: 24 },
+    { header: "出售时间", key: "sold_at", width: 14 },
+    { header: "出售价(¥)", key: "sale_price", width: 14 },
+    { header: "进货成本(¥)", key: "cost", width: 14 },
+    { header: "工费利润(¥)", key: "labor_profit", width: 14 },
+    { header: "附加费利润(¥)", key: "surcharge_profit", width: 14 },
+    { header: "金价利润(¥)", key: "gold_profit", width: 14 },
+    { header: "利润(¥)", key: "profit", width: 14 },
+  ];
+
+  for (const r of rows) {
+    ws.addRow({
+      code: r.code,
+      name: r.name,
+      sold_at: r.sold_at ?? "",
+      sale_price: r.sale_price,
+      cost: r.cost,
+      labor_profit: r.labor_profit ?? "",
+      surcharge_profit: r.surcharge_profit ?? "",
+      gold_profit: r.gold_profit ?? "",
+      profit: r.profit,
+    });
+  }
+
+  const sum = (pick: (r: ProfitRow) => number | null) =>
+    rows.reduce((s, r) => s + (pick(r) ?? 0), 0);
+  const totalRow = ws.addRow({
+    code: "合计",
+    sale_price: sum((r) => r.sale_price),
+    cost: sum((r) => r.cost),
+    labor_profit: sum((r) => r.labor_profit),
+    surcharge_profit: sum((r) => r.surcharge_profit),
+    gold_profit: sum((r) => r.gold_profit),
+    profit: sum((r) => r.profit),
+  });
+  totalRow.font = { bold: true };
+
+  const name =
+    filename ?? `利润明细_${new Date().toISOString().slice(0, 10)}.xlsx`;
   await downloadWorkbook(workbook, name);
 }

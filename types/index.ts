@@ -279,6 +279,21 @@ export interface ProcessingWithRelations extends Processing {
   customers?: Pick<Customer, "id" | "name"> | null;
 }
 
+/** 财务报表「已售产品利润明细」的一行（黄金额外带三段拆解） */
+export interface ProfitRow {
+  id: string;
+  code: string;
+  name: string;
+  sold_at: string | null;
+  sale_price: number;
+  cost: number;
+  profit: number;
+  is_gold: boolean;
+  labor_profit: number | null;
+  surcharge_profit: number | null;
+  gold_profit: number | null;
+}
+
 export interface PaginatedResponse<T> {
   data: T[];
   total: number;
